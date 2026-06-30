@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 		return noStoreJson({
 			ok: false,
 			message: errorMessage(error, "Génération TLS impossible."),
-			hint: "OpenSSL doit être disponible sur la machine pour générer automatiquement un certificat local."
+			hint: "La génération locale utilise le moteur crypto intégré. Vérifie surtout que le port HTTPS est libre."
 		}, { status: 400 });
 	}
 }

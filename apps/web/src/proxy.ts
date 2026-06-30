@@ -9,7 +9,10 @@ function isLoopbackHost(hostHeader: string | null): boolean {
 }
 
 function securityHeaders(isDev: boolean): Record<string, string> {
-	const scriptSrc = isDev ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self'";
+	// Next.js injects small inline bootstrap scripts even in production.
+	// Botdeck only accepts loopback hosts, so this keeps the desktop app simple
+	// without leaving the local interface open to remote pages.
+	const scriptSrc = isDev ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self' 'unsafe-inline'";
 	return {
 		"Content-Security-Policy": [
 			"default-src 'self'",

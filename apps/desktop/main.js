@@ -420,7 +420,12 @@ app.on("render-process-gone", (_event, _webContents, details) => debugLog(`[app]
 app.on("child-process-gone", (_event, details) => debugLog(`[app] child-process-gone ${JSON.stringify(details)}`));
 app.on("gpu-process-crashed", (_event, killed) => debugLog(`[app] gpu-process-crashed killed=${killed}`));
 app.on("web-contents-created", (_event, contents) => {
-	contents.on("console-message", (_event, level, message, line, sourceId) => {
+	contents.on("console-message", (event) => {
+		const details = event && typeof event === "object" ? event : null;
+		const level = details?.level ?? "unknown";
+		const message = details?.message ?? "";
+		const sourceId = details?.sourceId ?? "";
+		const line = details?.lineNumber ?? details?.line ?? 0;
 		debugLog(`[renderer:console:${level}] ${message} (${sourceId}:${line})`);
 	});
 	contents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {

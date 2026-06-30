@@ -255,3 +255,13 @@ test("read-only optional blocks are visible on matching UI actions", () => {
 	assert.match(css, /composerInputShell\.isReadonlyLocked::after/);
 	assert.doesNotMatch(`${app}\n${messageOverlays}\n${chatWidgets}\n${shellPanels}`, /readonlyButtonLock|readonlyInputLock|readonlyToolbarLock|contextMenuLockBadge|readonlyInlineLock/);
 });
+
+test("local TLS generation is packaged without external OpenSSL", () => {
+	const tlsManagement = read("apps/web/src/server/tls-management.ts");
+	const tlsGenerateRoute = read("apps/web/src/app/api/tls/generate/route.ts");
+
+	assert.doesNotMatch(tlsManagement, /spawn\(["']openssl["']/);
+	assert.match(tlsManagement, /generateKeyPairSync/);
+	assert.doesNotMatch(tlsGenerateRoute, /OpenSSL/i);
+});
+

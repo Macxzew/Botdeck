@@ -1,11 +1,9 @@
 // Gestion TLS locale pour Botdeck.
 
-import { spawn } from "node:child_process";
-import { randomBytes, createHash, X509Certificate } from "node:crypto";
+import { createHash, createSign, generateKeyPairSync, randomBytes, X509Certificate } from "node:crypto";
 import { existsSync } from "node:fs";
 import net from "node:net";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import tls from "node:tls";
 
@@ -235,42 +233,168 @@ export async function updateTlsPort(httpsPort: number, request: Request): Promis
 	return next;
 }
 
-function runOpenSsl(args: string[]): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const child = spawn("openssl", args, { stdio: "ignore", shell: false });
-		child.once("error", reject);
-		child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`OpenSSL a quitté avec le code ${code ?? "inconnu"}.`)));
-	});
+function derLength(length: number): Buffer {
+	if (length < 0x80) return Buffer.from([length]);
+	const bytes: number[] = [];
+	let value = length;
+	while (value > 0) {
+		bytes.unshift(value & 0xff);
+		value >>= 8;
+	}
+	return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function der(tag: number, ...parts: Buffer[]): Buffer {
+	const body = Buffer.concat(parts);
+	return Buffer.concat([Buffer.from([tag]), derLength(body.length), body]);
+}
+
+function sequence(...parts: Buffer[]): Buffer {
+	return der(0x30, ...parts);
+}
+
+function set(...parts: Buffer[]): Buffer {
+	return der(0x31, ...parts);
+}
+
+function integer(value: number | Buffer): Buffer {
+	let bytes: Buffer;
+	if (typeof value === "number") {
+		const parts: number[] = [];
+		let current = value;
+		do {
+			parts.unshift(current & 0xff);
+			current >>= 8;
+		} while (current > 0);
+		bytes = Buffer.from(parts);
+	} else {
+		bytes = Buffer.from(value);
+		while (bytes.length > 1 && bytes[0] === 0 && (bytes[1] & 0x80) === 0) bytes = bytes.subarray(1);
+	}
+	if (bytes[0] & 0x80) bytes = Buffer.concat([Buffer.from([0]), bytes]);
+	return der(0x02, bytes);
+}
+
+function oid(value: string): Buffer {
+	const parts = value.split(".").map((part) => Number.parseInt(part, 10));
+	if (parts.length < 2 || parts.some((part) => !Number.isFinite(part))) throw new Error(`OID invalide: ${value}`);
+	const bytes = [parts[0] * 40 + parts[1]];
+	for (const part of parts.slice(2)) {
+		const encoded = [part & 0x7f];
+		let current = part >> 7;
+		while (current > 0) {
+			encoded.unshift((current & 0x7f) | 0x80);
+			current >>= 7;
+		}
+		bytes.push(...encoded);
+	}
+	return der(0x06, Buffer.from(bytes));
+}
+
+function nullValue(): Buffer {
+	return Buffer.from([0x05, 0x00]);
+}
+
+function utf8(value: string): Buffer {
+	return der(0x0c, Buffer.from(value, "utf8"));
+}
+
+function octetString(value: Buffer): Buffer {
+	return der(0x04, value);
+}
+
+function bitString(value: Buffer, unusedBits = 0): Buffer {
+	return der(0x03, Buffer.concat([Buffer.from([unusedBits]), value]));
+}
+
+function booleanValue(value: boolean): Buffer {
+	return der(0x01, Buffer.from([value ? 0xff : 0x00]));
+}
+
+function context(tag: number, value: Buffer, constructed = true): Buffer {
+	return der((constructed ? 0xa0 : 0x80) + tag, value);
+}
+
+function utcTime(date: Date): Buffer {
+	const year = date.getUTCFullYear() % 100;
+	const stamp = [
+		year,
+		date.getUTCMonth() + 1,
+		date.getUTCDate(),
+		date.getUTCHours(),
+		date.getUTCMinutes(),
+		date.getUTCSeconds()
+	].map((part) => String(part).padStart(2, "0")).join("");
+	return der(0x17, Buffer.from(`${stamp}Z`, "ascii"));
+}
+
+function algorithmIdentifier(): Buffer {
+	return sequence(oid("1.2.840.113549.1.1.11"), nullValue());
+}
+
+function commonName(value: string): Buffer {
+	return sequence(set(sequence(oid("2.5.4.3"), utf8(value))));
+}
+
+function ipv4Bytes(value: string): Buffer | null {
+	if (net.isIP(value) !== 4) return null;
+	return Buffer.from(value.split(".").map((part) => Number.parseInt(part, 10)));
+}
+
+function safeDnsName(value: string): string | null {
+	const normalized = value.trim().toLowerCase();
+	if (!normalized || net.isIP(normalized)) return null;
+	if (!/^[a-z0-9.-]+$/.test(normalized)) return null;
+	return normalized;
+}
+
+function extension(oidValue: string, value: Buffer, critical = false): Buffer {
+	return sequence(oid(oidValue), ...(critical ? [booleanValue(true)] : []), octetString(value));
+}
+
+function subjectAltName(host: string): Buffer {
+	const names: Buffer[] = [context(2, Buffer.from("localhost", "ascii"), false), context(7, Buffer.from([127, 0, 0, 1]), false)];
+	const ip = ipv4Bytes(host);
+	if (ip && !ip.equals(Buffer.from([127, 0, 0, 1]))) names.push(context(7, ip, false));
+	const dns = safeDnsName(host);
+	if (dns && dns !== "localhost") names.push(context(2, Buffer.from(dns, "ascii"), false));
+	return sequence(...names);
+}
+
+function pem(label: string, derValue: Buffer): string {
+	const body = derValue.toString("base64").match(/.{1,64}/g)?.join("\n") ?? "";
+	return `-----BEGIN ${label}-----\n${body}\n-----END ${label}-----\n`;
 }
 
 export async function generateLocalCertificate(host: string): Promise<{ certificate: string; key: string }> {
-	const dir = path.join(tmpdir(), `botdeck-tls-${randomBytes(6).toString("hex")}`);
-	await mkdir(dir, { recursive: true });
-	const certificatePath = path.join(dir, "botdeck-local.crt");
-	const keyPath = path.join(dir, "botdeck-local.key");
-	const san = ["DNS:localhost", "IP:127.0.0.1"];
-	if (host && host !== "localhost" && host !== "127.0.0.1") san.push(`DNS:${host}`);
-	await runOpenSsl([
-		"req",
-		"-x509",
-		"-newkey",
-		"rsa:2048",
-		"-sha256",
-		"-nodes",
-		"-days",
-		"825",
-		"-keyout",
-		keyPath,
-		"-out",
-		certificatePath,
-		"-subj",
-		"/CN=Botdeck Local",
-		"-addext",
-		`subjectAltName=${san.join(",")}`
-	]);
+	const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048, publicExponent: 0x10001 });
+	const now = new Date();
+	const validFrom = new Date(now.getTime() - 60_000);
+	const validTo = new Date(now.getTime() + 825 * 24 * 60 * 60 * 1000);
+	const subject = commonName("Botdeck Local");
+	const publicKeyDer = publicKey.export({ type: "spki", format: "der" }) as Buffer;
+	const extensions = context(3, sequence(
+		extension("2.5.29.19", sequence(), true),
+		extension("2.5.29.15", bitString(Buffer.from([0xa0]), 5), true),
+		extension("2.5.29.37", sequence(oid("1.3.6.1.5.5.7.3.1"))),
+		extension("2.5.29.17", subjectAltName(host))
+	));
+	const tbsCertificate = sequence(
+		context(0, integer(2)),
+		integer(randomBytes(16)),
+		algorithmIdentifier(),
+		subject,
+		sequence(utcTime(validFrom), utcTime(validTo)),
+		subject,
+		publicKeyDer,
+		extensions
+	);
+	const signature = createSign("RSA-SHA256").update(tbsCertificate).end().sign(privateKey);
+	const certificateDer = sequence(tbsCertificate, algorithmIdentifier(), bitString(signature));
+	const keyDer = privateKey.export({ type: "pkcs8", format: "der" }) as Buffer;
 	return {
-		certificate: await readFile(certificatePath, "utf8"),
-		key: await readFile(keyPath, "utf8")
+		certificate: pem("CERTIFICATE", certificateDer),
+		key: pem("PRIVATE KEY", keyDer)
 	};
 }
 

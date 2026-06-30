@@ -572,7 +572,7 @@ export function FirstLaunchPresentation({ language, onLanguageChange, onClose, o
 										setActiveSlide(1);
 									}}
 								>
-									<span className="firstLaunchLanguageFlag" aria-hidden="true">🇫🇷</span>
+									<span className="firstLaunchLanguageFlag" aria-hidden="true">FR</span>
 									<span>
 										<strong>Français</strong>
 										<small>Interface en français</small>
@@ -587,7 +587,7 @@ export function FirstLaunchPresentation({ language, onLanguageChange, onClose, o
 										setActiveSlide(1);
 									}}
 								>
-									<span className="firstLaunchLanguageFlag" aria-hidden="true">🇬🇧</span>
+									<span className="firstLaunchLanguageFlag" aria-hidden="true">EN</span>
 									<span>
 										<strong>English</strong>
 										<small>English interface</small>
@@ -821,9 +821,9 @@ export function BotdeckProjectModal({ language, onClose, onExternalLink }: { lan
 export function LanguagePicker({ language, text, onChange }: { language: UiLanguage; text: UiText; onChange: (language: UiLanguage) => void }) {
 	const [open, setOpen] = useState(false);
 	const pickerRef = useRef<HTMLDivElement | null>(null);
-	const languages: Array<{ value: UiLanguage; flag: string; code: string; label: string; nativeLabel: string }> = [
-		{ value: "fr", flag: "🇫🇷", code: "FR", label: text.french, nativeLabel: "Français" },
-		{ value: "en", flag: "🇬🇧", code: "EN", label: text.english, nativeLabel: "English" }
+	const languages: Array<{ value: UiLanguage; code: string; label: string; nativeLabel: string }> = [
+		{ value: "fr", code: "FR", label: text.french, nativeLabel: "Français" },
+		{ value: "en", code: "EN", label: text.english, nativeLabel: "English" }
 	];
 	const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0];
 
@@ -881,7 +881,7 @@ export function LanguagePicker({ language, text, onChange }: { language: UiLangu
 								role="option"
 								aria-selected={selected}
 							>
-								<span className="languagePickerFlag" aria-hidden="true">{item.flag}</span>
+								<span className="languagePickerFlag" aria-hidden="true">{item.code}</span>
 								<span>
 									<strong>{item.nativeLabel}</strong>
 									<small>{item.code}</small>

@@ -805,7 +805,10 @@
 	height: 54px;
 	border-radius: 18px;
 	background: rgba(255, 255, 255, 0.08);
-	font-size: 1.7rem;
+	font-size: 0.86rem;
+	font-weight: 950;
+	letter-spacing: 0.08em;
+	line-height: 1;
 }
 
 .firstLaunchLanguageChoice strong,
