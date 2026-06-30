@@ -1,0 +1,257 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+const root = process.cwd();
+const read = (path) => readFileSync(join(root, path), "utf8");
+
+function listFiles(dir, predicate = () => true) {
+	const result = [];
+	for (const entry of readdirSync(join(root, dir))) {
+		const relative = join(dir, entry).replaceAll("\\", "/");
+		const stat = statSync(join(root, relative));
+		if (stat.isDirectory()) result.push(...listFiles(relative, predicate));
+		else if (predicate(relative)) result.push(relative);
+	}
+	return result;
+}
+
+test("quality scripts are available for external testers", () => {
+	const pkg = JSON.parse(read("package.json"));
+	for (const script of ["lint", "test", "typecheck", "check", "check:static", "check:secrets", "check:deps"]) {
+		assert.ok(pkg.scripts?.[script], `missing ${script}`);
+	}
+});
+
+
+
+test("release dependencies are pinned to stable channels", () => {
+	const rootPkg = JSON.parse(read("package.json"));
+	const webPkg = JSON.parse(read("apps/web/package.json"));
+	const lockfile = JSON.parse(read("package-lock.json"));
+
+	assert.equal(webPkg.dependencies.next, "16.2.9");
+	assert.equal(webPkg.dependencies.react, "19.2.7");
+	assert.equal(webPkg.dependencies["react-dom"], webPkg.dependencies.react);
+	assert.equal(rootPkg.devDependencies.electron, "42.5.0");
+	assert.equal(rootPkg.scripts["check:deps"], "node scripts/check-dependencies.mjs");
+	assert.match(rootPkg.scripts.check, /check:deps/);
+	for (const section of [rootPkg.dependencies, rootPkg.devDependencies, webPkg.dependencies, webPkg.devDependencies]) {
+		for (const version of Object.values(section || {})) assert.doesNotMatch(version, /canary|preview|alpha|beta|rc/i);
+	}
+	assert.equal(lockfile.packages["node_modules/next"].version, "16.2.9");
+	assert.equal(lockfile.packages["node_modules/react"].version, "19.2.7");
+	assert.equal(lockfile.packages["node_modules/react-dom"].version, "19.2.7");
+	assert.equal(lockfile.packages["node_modules/electron"].version, "42.5.0");
+	assert.equal(rootPkg.overrides.postcss, "8.5.15");
+	assert.equal(lockfile.packages["node_modules/postcss"].version, "8.5.15");
+});
+
+test("ci workflow runs the same public quality gate", () => {
+	const workflow = read(".github/workflows/ci.yml");
+	assert.match(workflow, /npm ci/);
+	assert.match(workflow, /npm run check/);
+});
+
+test("websocket control plane requires local auth", () => {
+	const controlPlane = read("apps/web/src/server/control-plane.ts");
+	const websocketAuth = read("apps/web/src/server/websocket-auth.ts");
+	const bootstrap = read("apps/web/src/app/api/bootstrap/route.ts");
+	const app = `${read("apps/web/src/components/botdeck-app.tsx")}\n${read("apps/web/src/features/workspace/core/index.tsx")}\n${read("apps/web/src/features/workspace/core/botdeck-transport.ts")}`;
+
+	assert.match(controlPlane, /verifyClient/);
+	assert.match(controlPlane, /validateWebSocketClient/);
+	assert.match(websocketAuth, /timingSafeEqual/);
+	assert.match(websocketAuth, /originIsAllowed/);
+	assert.match(bootstrap, /wsAuthToken/);
+	assert.match(app, /searchParams\.set\("auth"/);
+});
+
+test("desktop runtime data is routed to userData", () => {
+	const desktopMain = read("apps/desktop/main.js");
+	const runtimeSecret = read("apps/web/src/server/runtime-secret.ts");
+	const databaseUrl = read("apps/web/src/lib/database-url.ts");
+
+	assert.match(desktopMain, /app\.getPath\("userData"\)/);
+	assert.match(desktopMain, /BOTDECK_DATA_DIR/);
+	assert.match(desktopMain, /BOTDECK_RUNTIME_SECRET_PATH/);
+	assert.match(runtimeSecret, /BOTDECK_RUNTIME_SECRET_PATH/);
+	assert.match(databaseUrl, /BOTDECK_DATA_DIR/);
+});
+
+test("database bootstrap uses versioned migrations and backup, never data-loss push", () => {
+	const bootstrap = read("apps/web/src/server/database-bootstrap.ts");
+	const backups = read("apps/web/src/server/database-backups.ts");
+	const introspection = read("apps/web/src/server/database-introspection.ts");
+	const migrations = listFiles("apps/web/prisma/migrations", (file) => file.endsWith("migration.sql"));
+
+	assert.ok(migrations.length >= 1, "expected at least one Prisma migration");
+	assert.match(bootstrap, /migrate deploy/);
+	assert.match(bootstrap, /backupDatabaseBeforeMigration/);
+	assert.match(backups, /copySqliteSidecarIfPresent/);
+	assert.match(introspection, /listAppliedMigrations/);
+	assert.doesNotMatch(`${bootstrap}\n${backups}\n${introspection}`, /--accept-data-loss/);
+	assert.doesNotMatch(`${bootstrap}\n${backups}\n${introspection}`, /prisma\s+db\s+push/);
+});
+
+test("legacy static check stays aligned with current source layout", () => {
+	const checkScript = read("scripts/check.mjs");
+	assert.match(checkScript, /listFiles\("apps\/web\/src\/components"/);
+	assert.match(checkScript, /listFiles\("apps\/web\/src\/features"/);
+	assert.match(checkScript, /listFiles\("apps\/web\/src\/app\/styles"/);
+});
+
+test("repository contains persistent CI and tests", () => {
+	assert.ok(existsSync(join(root, ".github/workflows/ci.yml")), "missing CI workflow");
+	assert.ok(existsSync(join(root, "tests/quality-gates.test.mjs")), "missing quality tests");
+});
+
+
+
+test("public release package includes docs and reproducible setup files", () => {
+	for (const file of [
+		".github/workflows/ci.yml",
+		".node-version",
+		".nvmrc",
+		".env.example",
+		".gitignore",
+		"README.md",
+		"CHANGELOG.md",
+		"CONTRIBUTING.md"
+	]) {
+		assert.ok(existsSync(join(root, file)), `missing public release file ${file}`);
+	}
+
+	const readme = read("README.md");
+	const pkg = JSON.parse(read("package.json"));
+	assert.doesNotMatch(readme, /status-alpha/i);
+	assert.equal(read(".node-version").trim(), "24.17.0");
+	assert.equal(read(".nvmrc").trim(), "24.17.0");
+	assert.match(read(".gitignore"), /\.botdeck\//);
+	assert.match(read(".env.example"), /BOTDECK_WS_HOST=127\.0\.0\.1/);
+	assert.match(pkg.scripts["release:check"], /npm run quality/);
+});
+
+
+
+test("build assets are static and build-safe", () => {
+	assert.ok(existsSync(join(root, "apps/web/public/app-icon.png")), "missing static app icon");
+	assert.ok(existsSync(join(root, "apps/web/public/favicon.ico")), "missing static favicon");
+	assert.ok(!existsSync(join(root, "apps/web/src/app/app-icon.png/route.ts")), "app icon should not be a dynamic route");
+	assert.ok(!existsSync(join(root, "apps/web/src/app/favicon.ico/route.ts")), "favicon should not be a dynamic route");
+	assert.ok(!existsSync(join(root, "apps/web/src/server/project-assets.ts")), "project asset resolver should not be traced by Next build");
+});
+
+test("workspace runner exits after successful scripts", () => {
+	assert.match(read("scripts/run-workspaces.mjs"), /process\.exit\(0\);\s*$/);
+});
+
+test("large modules are split into focused slices", () => {
+	const app = read("apps/web/src/components/botdeck-app.tsx");
+	const appCore = read("apps/web/src/features/workspace/core/index.tsx");
+	const controlHelpers = read("apps/web/src/server/control-plane-helpers.ts");
+	const botSession = read("apps/web/src/features/bot-session/server/bot-session.ts");
+
+	assert.match(app, /features\/workspace\/components\/channel-modals/);
+	assert.match(app, /features\/workspace\/components\/guild-rail/);
+	assert.match(appCore, /botdeck-app-i18n/);
+	assert.match(controlHelpers, /control-plane-command-validation/);
+	assert.match(controlHelpers, /control-plane-primitives/);
+	assert.match(botSession, /bot-session-cache/);
+
+	assert.ok(existsSync(join(root, "apps/web/src/features/workspace/core/botdeck-app-i18n.ts")), "missing workspace core i18n slice");
+	assert.ok(existsSync(join(root, "apps/web/src/features/workspace/components/channel-modals.tsx")), "missing channel modal feature slice");
+	assert.ok(existsSync(join(root, "apps/web/src/features/workspace/components/guild-rail.tsx")), "missing guild rail feature slice");
+	assert.ok(existsSync(join(root, "apps/web/src/server/control-plane-command-validation.ts")), "missing command validation slice");
+	assert.ok(existsSync(join(root, "apps/web/src/server/control-plane-primitives.ts")), "missing control-plane primitive slice");
+	assert.ok(existsSync(join(root, "apps/web/src/features/bot-session/server/bot-session-cache.ts")), "missing session cache slice");
+});
+
+
+test("large UI and runtime domains live under feature folders", () => {
+	for (const file of [
+		"apps/web/src/features/slash-studio/components/command-content-step.tsx",
+		"apps/web/src/features/slash-studio/components/slash-studio-command-factory.ts",
+		"apps/web/src/features/server-settings/components/server-settings-panel.tsx",
+		"apps/web/src/features/bot-session/server/bot-session.ts",
+		"apps/web/src/features/messages/components/message-overlays.tsx",
+		"apps/web/src/features/permissions/components/channel-permissions-panel.tsx",
+		"apps/web/src/features/workspace/components/channel-modals.tsx"
+	]) {
+		assert.ok(existsSync(join(root, file)), `missing feature-owned module ${file}`);
+	}
+
+	assert.ok(!existsSync(join(root, "apps/web/src/components/slash-studio/command-content-step.tsx")), "legacy slash studio compatibility export should be removed");
+	assert.ok(!existsSync(join(root, "apps/web/src/server/sessions/bot-session.ts")), "legacy session compatibility export should be removed");
+	assert.match(read("apps/web/src/server/control-plane.ts"), /@\/features\/bot-session\/server\/bot-session/);
+});
+
+
+test("BotSession slices use typed this context", () => {
+	const sessionFiles = listFiles("apps/web/src/features/bot-session/server", (file) => file.endsWith(".ts"));
+	const source = sessionFiles.map(read).join("\n");
+
+	assert.ok(existsSync(join(root, "apps/web/src/features/bot-session/server/bot-session-context.ts")), "missing BotSessionContext contract");
+	assert.doesNotMatch(source, /this\s*:\s*any/);
+	assert.match(source, /interface BotSessionContext/);
+	assert.match(source, /this\s*:\s*BotSessionContext/);
+});
+
+
+test("read-only mode has mandatory and optional policy enforcement", () => {
+	const protocolAccess = read("packages/shared/src/command-access.ts");
+	const controlPlane = read("apps/web/src/server/control-plane.ts");
+	const app = read("apps/web/src/components/botdeck-app.tsx");
+	const models = read("packages/shared/src/models.ts");
+	const schema = read("apps/web/prisma/schema.prisma");
+	const migration = read("apps/web/prisma/migrations/20260627122000_read_only_mode/migration.sql");
+
+	const optionMigration = read("apps/web/prisma/migrations/20260627123500_read_only_policy_options/migration.sql");
+
+	assert.match(protocolAccess, /READ_ONLY_SLASH_STUDIO_COMMAND_TYPES/);
+	assert.match(protocolAccess, /READ_ONLY_AUTOMATION_COMMAND_TYPES/);
+	assert.match(protocolAccess, /READ_ONLY_MESSAGE_COMMAND_TYPES/);
+	assert.match(protocolAccess, /READ_ONLY_CHANNEL_COMMAND_TYPES/);
+	assert.match(protocolAccess, /READ_ONLY_MODERATION_COMMAND_TYPES/);
+	assert.match(protocolAccess, /getReadOnlyCommandBlockKind/);
+	assert.match(protocolAccess, /commandBlockedByReadOnlyPolicy/);
+	assert.match(controlPlane, /assertBotWriteAccessEnabled/);
+	assert.match(controlPlane, /getReadOnlyCommandBlockKind\(bot\?\.account, commandType\)/);
+	assert.match(controlPlane, /assertBotWriteAccessEnabled\(bot, command\.type\)/);
+	assert.match(app, /readOnlyBlockMessages/);
+	assert.match(app, /readOnlyBlockChannels/);
+	assert.match(app, /readOnlyBlockModeration/);
+	assert.match(app, /commandBlockedByReadOnlyPolicy/);
+	assert.match(models, /readOnlyMode\?: boolean/);
+	assert.match(models, /readOnlyBlockMessages\?: boolean/);
+	assert.match(schema, /readOnlyMode\s+Boolean\s+@default\(false\)/);
+	assert.match(schema, /readOnlyBlockMessages\s+Boolean\s+@default\(false\)/);
+	assert.match(migration, /ALTER TABLE "BotAccount" ADD COLUMN "readOnlyMode"/);
+	assert.match(optionMigration, /ALTER TABLE "BotAccount" ADD COLUMN "readOnlyBlockMessages"/);
+});
+
+test("read-only optional blocks are visible on matching UI actions", () => {
+	const app = read("apps/web/src/components/botdeck-app.tsx");
+	const composer = read("apps/web/src/components/botdeck-message-composer.tsx");
+	const messageOverlays = read("apps/web/src/features/messages/components/message-overlays.tsx");
+	const chatWidgets = read("apps/web/src/components/botdeck-app-chat-widgets.tsx");
+	const shellPanels = read("apps/web/src/components/botdeck-shell-panels.tsx");
+	const css = read("apps/web/src/app/styles/read-only-action-locks.css");
+
+	assert.match(app, /activeBotMessagesLocked/);
+	assert.match(composer, /composerAttachButton\$\{activeBotMessagesLocked/);
+	assert.match(composer, /composerEmbedButton\$\{activeBotMessagesLocked/);
+	assert.match(composer, /composerInput\$\{activeBotMessagesLocked/);
+	assert.match(app, /activeBotChannelsLocked/);
+	assert.match(app, /readOnlyLocked=\{activeBotChannelsLocked\}/);
+	assert.match(messageOverlays, /messagesLocked/);
+	assert.match(messageOverlays, /messagesLocked/);
+	assert.match(chatWidgets, /readOnlyLocked/);
+	assert.match(shellPanels, /moderationLocked/);
+	assert.match(shellPanels, /member\.role\.(remove|add)/);
+	assert.match(css, /lecture seule/);
+	assert.match(css, /button\.isReadonlyLocked::after/);
+	assert.match(css, /composerInputShell\.isReadonlyLocked::after/);
+	assert.doesNotMatch(`${app}\n${messageOverlays}\n${chatWidgets}\n${shellPanels}`, /readonlyButtonLock|readonlyInputLock|readonlyToolbarLock|contextMenuLockBadge|readonlyInlineLock/);
+});
