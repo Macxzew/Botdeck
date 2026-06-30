@@ -22,7 +22,7 @@ for (const file of files) {
 	const source = readFileSync(file, "utf8");
 	const rel = relative(root, file);
 	if (/part-\d+\.css$/.test(file) || /-parts[\\/]/.test(file)) {
-		errors.push(`${rel}: split CSS part files are forbidden in the V1 stylesheet layout`);
+		errors.push(`${rel}: split CSS part files are forbidden in the current stylesheet layout`);
 	}
 	if (/@import\s+["'][^"']*-parts\//.test(source)) {
 		errors.push(`${rel}: imports a removed *-parts stylesheet`);

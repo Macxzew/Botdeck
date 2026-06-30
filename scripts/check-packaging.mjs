@@ -39,4 +39,4 @@ assert.match(readme, /npm run build-lin/);
 assert.match(readme, /npm run build-mac/);
 assert.match(readme, /npm run package:check/);
 
-console.log("Packaging V1 gate passed.");
+console.log("Packaging gate passed.");

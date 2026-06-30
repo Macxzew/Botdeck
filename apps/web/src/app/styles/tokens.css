@@ -127,7 +127,7 @@
 	--discord-blurple: #5865f2;
 }
 
-/* Design System V1 — Button bridge classes.
+/* Design System — Button bridge classes.
    The legacy classes keep the visual rendering stable while TSX migrates to <Button>. */
 .uiButton {
 	font: inherit;
@@ -153,7 +153,7 @@
 	font-size: 0.78rem;
 }
 
-/* Design System V1 — semantic component tokens. */
+/* Design System — semantic component tokens. */
 :root {
 	/* Focus */
 	--bd-focus-ring: 0 0 0 3px rgba(53, 242, 196, 0.22);

@@ -26,7 +26,7 @@ function countMatches(files, pattern) {
 const tsxFiles = () => listFiles("apps/web/src", (file) => file.endsWith(".tsx"));
 const sourceFiles = () => listFiles("apps/web/src", (file) => /\.(ts|tsx)$/.test(file));
 
-test("V1 design system owns primitive buttons and fields", () => {
+test("design system owns primitive buttons and fields", () => {
 	const files = tsxFiles();
 	const nativeButtonFiles = files.filter((file) => read(file).includes("<button"));
 	const nativeInputFiles = files.filter((file) => read(file).includes("<input"));
@@ -45,7 +45,7 @@ test("V1 design system owns primitive buttons and fields", () => {
 	assert.ok((combined.match(/<Textarea\b/g) || []).length >= 10, "expected migrated Textarea usage");
 });
 
-test("V1 design system owns dialogs and navigation tabs", () => {
+test("design system owns dialogs and navigation tabs", () => {
 	const files = tsxFiles();
 	const dialogFiles = files.filter((file) => read(file).includes('role="dialog"'));
 	const tablistFiles = files.filter((file) => read(file).includes('role="tablist"'));
@@ -59,7 +59,7 @@ test("V1 design system owns dialogs and navigation tabs", () => {
 	assert.ok((combined.match(/<TabButton\b/g) || []).length >= 10, "expected TabButton usage");
 });
 
-test("V1 design system primitives stay present", () => {
+test("design system primitives stay present", () => {
 	for (const file of [
 		"apps/web/src/components/ui/button.tsx",
 		"apps/web/src/components/ui/field.tsx",
@@ -71,7 +71,7 @@ test("V1 design system primitives stay present", () => {
 		"apps/web/src/app/styles/tokens.css",
 		"apps/web/src/app/styles/layout-system.css"
 	]) {
-		assert.ok(existsSync(join(root, file)), `missing V1 design system file ${file}`);
+		assert.ok(existsSync(join(root, file)), `design system file missing: ${file}`);
 	}
 
 	const uiSource = read("apps/web/src/components/ui/button.tsx") + read("apps/web/src/components/ui/field.tsx") + read("apps/web/src/components/ui/panel.tsx") + read("apps/web/src/components/ui/badge.tsx") + read("apps/web/src/components/ui/layout.tsx");
@@ -80,7 +80,7 @@ test("V1 design system primitives stay present", () => {
 	}
 });
 
-test("V1 frontend architecture has no legacy compatibility wrappers", () => {
+test("frontend architecture has no legacy compatibility wrappers", () => {
 	for (const path of [
 		"apps/web/src/components/slash-studio",
 		"apps/web/src/components/server-settings",
@@ -91,11 +91,11 @@ test("V1 frontend architecture has no legacy compatibility wrappers", () => {
 
 	const app = read("apps/web/src/components/botdeck-app.tsx");
 	const core = read("apps/web/src/features/workspace/core/index.tsx");
-	assert.ok(app.split("\n").length < 2600, "botdeck-app.tsx should stay below the V1 split threshold");
+	assert.ok(app.split("\n").length < 2600, "botdeck-app.tsx split threshold exceeded");
 	assert.ok(core.split("\n").length < 350, "workspace core index should stay an orchestrator");
 });
 
-test("V1 API routes use shared response helpers where migrated", () => {
+test("API routes use shared response helpers where migrated", () => {
 	const helper = read("apps/web/src/server/api-response.ts");
 	assert.match(helper, /okJson/);
 	assert.match(helper, /errorJson/);
@@ -113,7 +113,7 @@ test("V1 API routes use shared response helpers where migrated", () => {
 	}
 });
 
-test("V1 backend cleanup slices remain in place", () => {
+test("backend cleanup slices remain in place", () => {
 	for (const file of [
 		"apps/web/src/server/database-introspection.ts",
 		"apps/web/src/server/database-backups.ts",
