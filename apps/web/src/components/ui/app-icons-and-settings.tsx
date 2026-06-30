@@ -293,10 +293,10 @@ export function BotSettingsModal({
 
 				<div className="serverSettingsBody">
 					<Tabs as="nav" className="serverSettingsNav" aria-label={copy.pageTitle}>
-							<TabButton variant="ghost" active={tab === "info"} type="button" onClick={() => setTab("info")}>{copy.infoTab}</TabButton>
-							<TabButton variant="ghost" active={tab === "activity"} type="button" onClick={() => setTab("activity")}>{copy.activityTab}</TabButton>
-							<TabButton variant="ghost" active={tab === "invitation"} type="button" onClick={() => setTab("invitation")}>{copy.invitationTab}</TabButton>
-							<TabButton variant="ghost" active={tab === "interface"} type="button" onClick={() => setTab("interface")}>{copy.interfaceTab}</TabButton>
+							<TabButton active={tab === "info"} type="button" onClick={() => setTab("info")}>{copy.infoTab}</TabButton>
+							<TabButton active={tab === "activity"} type="button" onClick={() => setTab("activity")}>{copy.activityTab}</TabButton>
+							<TabButton active={tab === "invitation"} type="button" onClick={() => setTab("invitation")}>{copy.invitationTab}</TabButton>
+							<TabButton active={tab === "interface"} type="button" onClick={() => setTab("interface")}>{copy.interfaceTab}</TabButton>
 						</Tabs>
 
 						<section className="serverSettingsContent">

@@ -144,7 +144,7 @@ export function ChannelContextMenu({
 							{isCategory ? label.copyCategoryId : label.copyChannelId}
 						</Button>
 						{!isCategory && menu.channel?.type !== "thread" ? (
-							<Button type="button" variant="ghost" role="menuitem" className={readOnlyLocked ? "isReadonlyLocked" : ""} onClick={onRecreatePurge} disabled={!canManage || readOnlyLocked} title={readOnlyLocked ? label.readOnlyBlocked : undefined}>
+							<Button type="button" variant="danger" role="menuitem" className={readOnlyLocked ? "isReadonlyLocked" : "danger"} onClick={onRecreatePurge} disabled={!canManage || readOnlyLocked} title={readOnlyLocked ? label.readOnlyBlocked : undefined}>
 								{label.recreatePurgeChannel}
 							</Button>
 						) : null}
@@ -153,7 +153,7 @@ export function ChannelContextMenu({
 						</Button>
 					</>
 				) : null}
-				{readOnlyLocked ? <small className="contextMenuHint isReadonlyLocked"><span aria-hidden="true">🔒</span>{label.readOnlyBlocked}</small> : !canManage ? <small className="contextMenuHint">{label.manageRequired}</small> : null}
+				{!readOnlyLocked && !canManage ? <small className="contextMenuHint">{label.manageRequired}</small> : null}
 			</div>
 		</>
 	);

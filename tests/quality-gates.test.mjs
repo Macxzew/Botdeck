@@ -265,3 +265,34 @@ test("local TLS generation is packaged without external OpenSSL", () => {
 	assert.doesNotMatch(tlsGenerateRoute, /OpenSSL/i);
 });
 
+
+test("read-only channel menu does not render duplicate hint", () => {
+	const chatWidgets = read("apps/web/src/components/botdeck-app-chat-widgets.tsx");
+	const readOnlyCss = read("apps/web/src/app/styles/read-only-action-locks.css");
+
+	assert.doesNotMatch(chatWidgets, /contextMenuHint isReadonlyLocked/);
+	assert.match(chatWidgets, /!readOnlyLocked && !canManage/);
+	assert.doesNotMatch(readOnlyCss, /contextMenuHint\.isReadonlyLocked/);
+});
+
+test("channel destructive menu actions share the danger button variant", () => {
+	const chatWidgets = read("apps/web/src/components/botdeck-app-chat-widgets.tsx");
+	const recreatePurgeButton = chatWidgets.match(/<Button[^>]+onClick=\{onRecreatePurge\}[^>]*>/s)?.[0] ?? "";
+	const deleteButton = chatWidgets.match(/<Button[^>]+onClick=\{onDelete\}[^>]*>/s)?.[0] ?? "";
+
+	assert.match(recreatePurgeButton, /variant="danger"/);
+	assert.match(recreatePurgeButton, /className=\{readOnlyLocked \? "isReadonlyLocked" : "danger"\}/);
+	assert.match(deleteButton, /variant="danger"/);
+	assert.match(deleteButton, /className=\{readOnlyLocked \? "isReadonlyLocked" : "danger"\}/);
+});
+
+test("bot settings navigation uses the shared server tab styling", () => {
+	const botSettings = read("apps/web/src/components/ui/app-icons-and-settings.tsx");
+	const botSettingsNav = botSettings.slice(botSettings.indexOf('className="serverSettingsNav"'));
+
+	assert.doesNotMatch(botSettingsNav, /<TabButton\s+variant="ghost"/);
+	assert.match(botSettingsNav, /<TabButton active=\{tab === "info"\}/);
+	assert.match(botSettingsNav, /<TabButton active=\{tab === "activity"\}/);
+	assert.match(botSettingsNav, /<TabButton active=\{tab === "invitation"\}/);
+	assert.match(botSettingsNav, /<TabButton active=\{tab === "interface"\}/);
+});

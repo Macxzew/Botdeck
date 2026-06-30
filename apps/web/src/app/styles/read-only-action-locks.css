@@ -85,12 +85,6 @@ button.isReadonlyLocked::after,
 	padding-right: 38px;
 }
 
-.contextMenuHint.isReadonlyLocked {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	color: #ffd89a;
-}
 
 .memberRoleList button.isReadonlyLocked .roleSwatch {
 	filter: grayscale(0.55);
