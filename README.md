@@ -10,11 +10,7 @@
   <img alt="Status" src="https://img.shields.io/badge/status-public%20beta-yellow" />
 </p>
 
-Botdeck is a local desktop app for managing Discord bots from one clean interface.
-
-It helps you create bots, manage servers, edit messages, build embeds, configure commands, monitor activity, and keep the runtime local to your machine.
-
-> Status: public beta. Test Botdeck on a disposable Discord server before using it on an important server.
+Botdeck is an all-in-one dashboard for managing Discord bots, servers, commands, automations and monitoring from a single workspace.
 
 ## Preview
 
