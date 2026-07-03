@@ -33,6 +33,7 @@ import { useMessageListScroll } from "@/features/workspace/hooks/use-message-lis
 import { useMessageSearch } from "@/features/workspace/hooks/use-message-search";
 import { useActiveWorkspaceView } from "@/features/workspace/hooks/use-active-workspace-view";
 import { useChannelActions } from "@/features/workspace/hooks/use-channel-actions";
+import { useMemberModerationActions } from "@/features/members/hooks/use-member-moderation-actions";
 import { useAddBotModal } from "@/features/workspace/hooks/use-add-bot-modal";
 import { BotdeckAppPanels } from "./botdeck-app-panels";
 import { BotdeckUserPanel } from "./botdeck-user-panel";
@@ -2093,6 +2094,27 @@ export default function BotdeckApp() {
 
 	const { channelDragSource, channelDropTarget, channelDragAllowed, beginChannelDrag, updateChannelDropTarget, finishChannelDrop, cancelChannelDrag, channelDropClass } = useChannelDrag({ activeBotId, activeGuildId, canManageChannelsInGuild, language, sendSocketCommand, pushToast });
 
+	const {
+		memberContextMenu,
+		setMemberContextMenu,
+		memberModerationTarget,
+		memberModerationReason,
+		setMemberModerationReason,
+		openMemberContextMenu,
+		requestMemberModeration,
+		cancelMemberModeration,
+		submitMemberModeration
+	} = useMemberModerationActions({
+		activeBotId,
+		workspace,
+		onCloseMenus: () => {
+			setMessageContextMenu(null);
+			setChannelContextMenu(null);
+			setReactionPicker(null);
+		},
+		onCommand: sendMemberCommand
+	});
+
 	const startChannelSidebarResize = useChannelSidebarResize(channelSidebarWidth, setChannelSidebarWidth);
 
 	if (!bootReady || !bootstrap || !firstLaunchPresentationReady) {
@@ -2182,6 +2204,7 @@ export default function BotdeckApp() {
 				onOpenChannelContextMenu={openChannelContextMenu}
 				onOpenForumPost={openForumPost}
 				onOpenMemberProfile={openMemberProfile}
+				onOpenMemberContextMenu={openMemberContextMenu}
 				onOpenRecoverableThread={openRecoverableThread}
 				onOpenServerSettings={() => setServerSettingsOpen(true)}
 				onSelectChannel={selectChannel}
@@ -2312,6 +2335,7 @@ export default function BotdeckApp() {
 							onDismissEphemeralMessage={dismissEphemeralMessage}
 							onOpenAttachmentPreview={openAttachmentPreview}
 							onOpenMemberProfile={openMemberProfile}
+							onOpenMemberContextMenu={openMemberContextMenu}
 							onOpenPinsPanel={openPinsPanel}
 							onOpenReactionPicker={openReactionPicker}
 							onPromptExternalLink={promptExternalLink}
@@ -2439,6 +2463,14 @@ export default function BotdeckApp() {
 				channelDeleteTarget={channelDeleteTarget}
 				setChannelDeleteTarget={setChannelDeleteTarget}
 				deleteGuildChannel={deleteGuildChannel}
+				memberContextMenu={memberContextMenu}
+				setMemberContextMenu={setMemberContextMenu}
+				memberModerationTarget={memberModerationTarget}
+				memberModerationReason={memberModerationReason}
+				setMemberModerationReason={setMemberModerationReason}
+				requestMemberModeration={requestMemberModeration}
+				cancelMemberModeration={cancelMemberModeration}
+				submitMemberModeration={submitMemberModeration}
 				messageContextMenu={messageContextMenu}
 				setMessageContextMenu={setMessageContextMenu}
 				activeBotMessagesLocked={activeBotMessagesLocked}

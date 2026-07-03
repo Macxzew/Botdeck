@@ -403,6 +403,7 @@ export function MemberProfilePanel({
   allProfiles,
   onClose,
   onCommand,
+  onRequestModeration,
   onSwitchProfile,
   onOpenDm,
   text,
@@ -428,6 +429,7 @@ export function MemberProfilePanel({
   allProfiles: WorkspaceState["memberProfilesByKey"];
   onClose: () => void;
   onCommand: (command: ClientCommand) => void;
+  onRequestModeration: (action: "kick" | "ban", target: { guildId: string; userId: string; displayName: string }) => void;
   onSwitchProfile: (guildId: string, userId: string) => void;
   onOpenDm: (userId: string) => void;
   text: UiText;
@@ -766,15 +768,13 @@ export function MemberProfilePanel({
                   title={
                     moderationLocked ? text.readOnlyModeWriteBlocked : undefined
                   }
-                  onClick={() => {
-                    if (window.confirm(text.confirmKick(displayName))) {
-                      onCommand({
-                        ...buildCommandBase(),
-                        type: "member.kick",
-                        reason: "Botdeck moderation action",
-                      } satisfies ClientCommand);
-                    }
-                  }}
+                  onClick={() =>
+                    onRequestModeration("kick", {
+                      guildId: target.guildId,
+                      userId: target.userId,
+                      displayName,
+                    })
+                  }
                 >
                   {text.kick}
                 </Button>
@@ -786,16 +786,13 @@ export function MemberProfilePanel({
                   title={
                     moderationLocked ? text.readOnlyModeWriteBlocked : undefined
                   }
-                  onClick={() => {
-                    if (window.confirm(text.confirmBan(displayName))) {
-                      onCommand({
-                        ...buildCommandBase(),
-                        type: "member.ban",
-                        reason: "Botdeck moderation action",
-                        deleteMessageSeconds: 0,
-                      } satisfies ClientCommand);
-                    }
-                  }}
+                  onClick={() =>
+                    onRequestModeration("ban", {
+                      guildId: target.guildId,
+                      userId: target.userId,
+                      displayName,
+                    })
+                  }
                 >
                   {text.ban}
                 </Button>

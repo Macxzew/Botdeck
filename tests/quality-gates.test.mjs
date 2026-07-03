@@ -296,3 +296,29 @@ test("bot settings navigation uses the shared server tab styling", () => {
 	assert.match(botSettingsNav, /<TabButton active=\{tab === "invitation"\}/);
 	assert.match(botSettingsNav, /<TabButton active=\{tab === "interface"\}/);
 });
+
+test("server member context menu supports kick and ban reason modals", () => {
+	const app = read("apps/web/src/components/botdeck-app.tsx");
+	const panels = read("apps/web/src/components/botdeck-app-panels.tsx");
+	const messageList = read("apps/web/src/components/botdeck-message-list.tsx");
+	const channelSidebar = read("apps/web/src/components/botdeck-channel-sidebar.tsx");
+	const hook = read("apps/web/src/features/members/hooks/use-member-moderation-actions.ts");
+	const actions = read("apps/web/src/features/members/components/member-moderation-actions.tsx");
+	const i18n = read("apps/web/src/features/workspace/core/botdeck-app-i18n.ts");
+
+	assert.match(app, /useMemberModerationActions/);
+	assert.match(messageList, /onOpenMemberContextMenu/);
+	assert.match(channelSidebar, /onOpenMemberContextMenu/);
+	assert.match(panels, /<MemberContextMenu/);
+	assert.match(panels, /<MemberModerationModal/);
+	assert.match(actions, /text\.kickMember/);
+	assert.match(actions, /text\.banMember/);
+	assert.match(actions, /moderationReasonOptional/);
+	assert.match(actions, /maxLength=\{512\}/);
+	assert.match(hook, /type: "member\.kick"/);
+	assert.match(hook, /type: "member\.ban"/);
+	assert.match(hook, /deleteMessageSeconds: 0/);
+	assert.match(hook, /membersByGuildId\[guildId\]/);
+	assert.match(i18n, /kickMember: "Expulser le membre"/);
+	assert.match(i18n, /banMember: "Ban member"/);
+});

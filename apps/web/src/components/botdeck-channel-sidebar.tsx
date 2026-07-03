@@ -1,4 +1,4 @@
-import type { DragEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { DragEvent, MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { ChannelSummary, ForumPostSummary, VoiceStateSummary, WorkspaceState } from "@botdeck/shared";
 import type { ChannelActivityState, ChannelCategoryGroup, RetainedDmChannel, UiText } from "@/features/workspace/core";
 import { displayUserName, dmGuildId, resolveDmChannelUser, stripDiscriminator } from "@/features/workspace/core";
@@ -47,7 +47,8 @@ type BotdeckChannelSidebarProps = {
 	onCloseDrawer: () => void;
 	onCloseRetainedDm: (channelId: string) => void;
 	onFinishChannelDrop: (event: DragEvent<HTMLElement>, channel: ChannelSummary | null) => void;
-	onOpenChannelContextMenu: (event: React.MouseEvent<HTMLElement>, channel: ChannelSummary | null) => void;
+	onOpenChannelContextMenu: (event: MouseEvent<HTMLElement>, channel: ChannelSummary | null) => void;
+	onOpenMemberContextMenu: (event: MouseEvent<HTMLElement>, guildId: string | null, userId: string) => boolean;
 	onOpenForumPost: (post: ForumPostSummary) => void;
 	onOpenMemberProfile: (guildId: string | null, userId: string) => void;
 	onOpenRecoverableThread: (guildId: string, channelId: string) => void;
@@ -90,6 +91,7 @@ export function BotdeckChannelSidebar({
 	onOpenChannelContextMenu,
 	onOpenForumPost,
 	onOpenMemberProfile,
+	onOpenMemberContextMenu,
 	onOpenRecoverableThread,
 	onOpenServerSettings,
 	onSelectChannel,
@@ -227,7 +229,7 @@ export function BotdeckChannelSidebar({
 																	{voiceMembers.map((state) => {
 																		const user = workspace.usersById[state.userId];
 																		const label = displayUserName(user, state.userId);
-																		return <Button variant="unstyled" key={state.userId} className="voiceMemberButton" type="button" onClick={() => onOpenMemberProfile(activeGuildId, state.userId)}><span className="voiceMemberDot" aria-hidden="true" /><span>{label}</span>{state.serverMuted || state.selfMuted ? <small>{text.muted}</small> : null}</Button>;
+																		return <Button variant="unstyled" key={state.userId} className="voiceMemberButton" type="button" onClick={() => onOpenMemberProfile(activeGuildId, state.userId)} onContextMenu={(event) => onOpenMemberContextMenu(event, activeGuildId, state.userId)}><span className="voiceMemberDot" aria-hidden="true" /><span>{label}</span>{state.serverMuted || state.selfMuted ? <small>{text.muted}</small> : null}</Button>;
 																	})}
 																</div>
 															) : null}

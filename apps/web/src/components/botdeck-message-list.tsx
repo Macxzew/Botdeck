@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/field";
 import { createPortal } from "react-dom";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, MouseEvent, SetStateAction } from "react";
 import type { BotAccountSummary, MessageAttachmentSummary, MessageSummary, WorkspaceState } from "@botdeck/shared";
 import {
 	AppBadge,
@@ -53,6 +53,7 @@ type BotdeckMessageRowsProps = {
 	onOpenAttachmentPreview: (attachment: MessageAttachmentSummary, kind: MediaPreviewState["kind"]) => void;
 	onOpenReactionPicker: (messageId: string, anchor: HTMLElement) => void;
 	onOpenMemberProfile: (guildId: string | null, userId: string) => void;
+	onOpenMemberContextMenu: (event: MouseEvent<HTMLElement>, guildId: string | null, userId: string) => boolean;
 	onOpenPinsPanel: () => void;
 	onPromptExternalLink: (url: string) => void;
 	onSetMessageReaction: (message: MessageSummary, emoji: string, remove?: boolean) => void;
@@ -79,6 +80,7 @@ export function BotdeckMessageRows({
 	onDismissEphemeralMessage,
 	onOpenAttachmentPreview,
 	onOpenMemberProfile,
+	onOpenMemberContextMenu,
 	onOpenPinsPanel,
 	onOpenReactionPicker,
 	onPromptExternalLink,
@@ -197,7 +199,7 @@ export function BotdeckMessageRows({
 						<MoreIcon />
 					</Button>
 				</div>
-				<Button variant="unstyled" className="avatar messageAvatarButton" type="button" aria-label={text.profile} onClick={() => onOpenMemberProfile(activeGuildId, message.authorId)}>
+				<Button variant="unstyled" className="avatar messageAvatarButton" type="button" aria-label={text.profile} onClick={() => onOpenMemberProfile(activeGuildId, message.authorId)} onContextMenu={(event) => onOpenMemberContextMenu(event, activeGuildId, message.authorId)}>
 					{authorAvatar ? (
 						<img className="messageAvatarImage" src={authorAvatar} alt="" aria-hidden="true" />
 					) : (
@@ -226,7 +228,7 @@ export function BotdeckMessageRows({
 						</div>
 					) : null}
 					<div className="messageMeta">
-						<Button variant="unstyled" className="authorNameLine messageAuthorButton" type="button" onClick={() => onOpenMemberProfile(activeGuildId, message.authorId)}>
+						<Button variant="unstyled" className="authorNameLine messageAuthorButton" type="button" onClick={() => onOpenMemberProfile(activeGuildId, message.authorId)} onContextMenu={(event) => onOpenMemberContextMenu(event, activeGuildId, message.authorId)}>
 							<strong>{authorLabel}</strong>
 							{authorIsBot ? <AppBadge /> : null}
 						</Button>

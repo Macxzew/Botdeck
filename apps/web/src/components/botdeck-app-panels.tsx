@@ -25,6 +25,7 @@ import { PinnedMessagesPanel } from "@/features/messages/components/pinned-messa
 import { ChannelContextMenu } from "@/components/botdeck-app-chat-widgets";
 import { ChannelDeleteModal, ChannelRecreateModal } from "@/features/workspace/components/channel-modals";
 import { MemberProfilePanel } from "@/components/botdeck-shell-panels";
+import { MemberContextMenu, MemberModerationModal } from "@/features/members/components/member-moderation-actions";
 
 type BotdeckAppPanelsProps = {
 	botModal: any;
@@ -100,6 +101,14 @@ type BotdeckAppPanelsProps = {
 	channelDeleteTarget: any;
 	setChannelDeleteTarget: any;
 	deleteGuildChannel: any;
+	memberContextMenu: any;
+	setMemberContextMenu: any;
+	memberModerationTarget: any;
+	memberModerationReason: any;
+	setMemberModerationReason: any;
+	requestMemberModeration: any;
+	cancelMemberModeration: any;
+	submitMemberModeration: any;
 	messageContextMenu: any;
 	setMessageContextMenu: any;
 	activeBotMessagesLocked: any;
@@ -206,6 +215,14 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 		channelDeleteTarget,
 		setChannelDeleteTarget,
 		deleteGuildChannel,
+		memberContextMenu,
+		setMemberContextMenu,
+		memberModerationTarget,
+		memberModerationReason,
+		setMemberModerationReason,
+		requestMemberModeration,
+		cancelMemberModeration,
+		submitMemberModeration,
 		messageContextMenu,
 		setMessageContextMenu,
 		activeBotMessagesLocked,
@@ -411,6 +428,26 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 				/>
 			) : null}
 
+			{memberContextMenu ? (
+				<MemberContextMenu
+					menu={memberContextMenu}
+					canModerate={Boolean(activeBotId)}
+					readOnlyLocked={activeBotModerationLocked}
+					onClose={() => setMemberContextMenu(null)}
+					onProfile={() => {
+						openMemberProfile(memberContextMenu.guildId, memberContextMenu.userId);
+						setMemberContextMenu(null);
+					}}
+					onKick={() => requestMemberModeration("kick", memberContextMenu)}
+					onBan={() => requestMemberModeration("ban", memberContextMenu)}
+					onCopyUserId={() => {
+						void copyToClipboard(memberContextMenu.userId, text.userId);
+						setMemberContextMenu(null);
+					}}
+					text={text}
+				/>
+			) : null}
+
 			{messageContextMenu ? (
 				<MessageContextMenu
 					menu={messageContextMenu}
@@ -481,8 +518,20 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 					allProfiles={workspace.memberProfilesByKey}
 					onClose={() => setMemberPanelTarget(null)}
 					onCommand={sendMemberCommand}
+					onRequestModeration={requestMemberModeration}
 					onSwitchProfile={showMemberProfile}
 					onOpenDm={openMemberThread}
+					text={text}
+				/>
+			) : null}
+
+			{memberModerationTarget ? (
+				<MemberModerationModal
+					target={memberModerationTarget}
+					reason={memberModerationReason}
+					setReason={setMemberModerationReason}
+					onCancel={cancelMemberModeration}
+					onConfirm={submitMemberModeration}
 					text={text}
 				/>
 			) : null}
