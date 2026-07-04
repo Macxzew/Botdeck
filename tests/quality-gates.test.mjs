@@ -336,3 +336,37 @@ test("server member context menu supports kick and ban reason modals", () => {
 	assert.match(i18n, /kickMember: "Expulser le membre"/);
 	assert.match(i18n, /banMember: "Ban member"/);
 });
+
+test("server settings include a searchable paginated member directory", () => {
+	const panel = read("apps/web/src/features/server-settings/components/server-settings-panel.tsx");
+	const model = read("apps/web/src/features/server-settings/server-automation-model.ts");
+	const labels = read("apps/web/src/features/server-settings/server-settings-text.ts");
+	const css = read("apps/web/src/app/styles/settings-panels.css");
+
+	assert.match(model, /ServerSettingsTab = "overview" \| "members" \| "automations" \| "templates"/);
+	assert.match(panel, /function ServerMembersPanel/);
+	assert.match(panel, /SERVER_MEMBERS_PAGE_SIZE = 24/);
+	assert.match(panel, /type: "guild\.members\.fetch"/);
+	assert.match(panel, /active=\{tab === "members"\}/);
+	assert.match(panel, /labels\.membersSearchPlaceholder/);
+	assert.match(panel, /visibleMemberPages\(safePage, pageCount\)/);
+	assert.match(panel, /className="serverMembersTable"/);
+	assert.match(panel, /labels\.memberColumnUsername/);
+	assert.doesNotMatch(panel, /labels\.memberColumnName/);
+	assert.doesNotMatch(panel, /className="serverMemberId"/);
+	assert.doesNotMatch(panel, /className="serverMemberUsername"/);
+	assert.match(panel, /member\.role\.add/);
+	assert.match(panel, /member\.role\.remove/);
+	assert.match(panel, /aria-sort=\{sortKey ===/);
+	assert.match(labels, /memberBotBadge: "APP"/);
+	assert.match(labels, /memberAddRole: "Ajouter un rôle"/);
+	assert.match(labels, /membersTab: "Membres"/);
+	assert.match(labels, /membersTab: "Members"/);
+	assert.match(labels, /membersSearchPlaceholder: "Nom, pseudo, ID utilisateur ou rôle\.\.\."/);
+	assert.match(labels, /membersSearchPlaceholder: "Name, username, user ID, or role\.\.\."/);
+	assert.match(css, /\.serverMembersTableScroller \{[^}]*overflow: auto;/s);
+	assert.match(css, /\.serverMembersTable \{[^}]*table-layout: fixed;/s);
+	assert.match(css, /\.serverMemberPseudoCell/);
+	assert.match(css, /\.serverMemberRoleAdd/);
+	assert.match(css, /\.serverMembersPagination/);
+});

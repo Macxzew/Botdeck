@@ -18,7 +18,7 @@ import {
   type RoleSummary,
   type WorkspaceState,
 } from "@botdeck/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { i18nText } from "@/features/workspace/core";
 
@@ -2024,6 +2024,426 @@ function ServerTemplatesPanel({
   );
 }
 
+const SERVER_MEMBERS_PAGE_SIZE = 24;
+
+type MemberSortKey = "displayName" | "joinedAt" | "roles";
+type SortDirection = "asc" | "desc";
+
+function memberDisplayName(member: GuildMemberSummary): string {
+  return (member.displayName?.trim() || member.username?.trim() || member.userId).trim();
+}
+
+function roleDisplayName(role: RoleSummary, labels: ServerSettingsText): string {
+  return role.name?.trim() || labels.roleIdFallback(role.id);
+}
+
+function roleColorValue(role: RoleSummary): string {
+  return role.colorHex ?? (role.color ? `#${role.color.toString(16).padStart(6, "0")}` : "rgba(255,255,255,0.16)");
+}
+
+function memberRoleSummaries(
+  member: GuildMemberSummary,
+  roles: RoleSummary[],
+): RoleSummary[] {
+  const memberRoleIds = new Set(member.roleIds);
+  return roles
+    .filter((role) => role.id !== member.guildId && memberRoleIds.has(role.id))
+    .sort((left, right) => right.position - left.position || left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+}
+
+function memberAvailableRoles(
+  member: GuildMemberSummary,
+  roles: RoleSummary[],
+): RoleSummary[] {
+  const memberRoleIds = new Set(member.roleIds);
+  return roles
+    .filter((role) => role.id !== member.guildId && !role.managed && !memberRoleIds.has(role.id))
+    .sort((left, right) => right.position - left.position || left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+}
+
+function memberSearchValue(
+  member: GuildMemberSummary,
+  roleNames: string[],
+): string {
+  return [
+    memberDisplayName(member),
+    member.username,
+    member.userId,
+    member.roleIds.join(" "),
+    roleNames.join(" "),
+    member.bot ? "app bot" : "user",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+}
+
+function formatMemberJoinedAt(value: string | null | undefined, labels: ServerSettingsText): string {
+  if (!value) return labels.notLoaded;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return labels.notLoaded;
+  return date.toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function memberJoinedTime(member: GuildMemberSummary): number {
+  if (!member.joinedAt) return 0;
+  const joinedAt = new Date(member.joinedAt).getTime();
+  return Number.isFinite(joinedAt) ? joinedAt : 0;
+}
+
+function compareMemberRows(
+  left: GuildMemberSummary,
+  right: GuildMemberSummary,
+  sortKey: MemberSortKey,
+  direction: SortDirection,
+  roleById: Map<string, RoleSummary>,
+): number {
+  const directionMultiplier = direction === "asc" ? 1 : -1;
+  let result = 0;
+  if (sortKey === "displayName") {
+    result = memberDisplayName(left).localeCompare(memberDisplayName(right), undefined, { sensitivity: "base" });
+  } else if (sortKey === "joinedAt") {
+    result = memberJoinedTime(left) - memberJoinedTime(right);
+  } else {
+    const leftRoles = left.roleIds.map((roleId) => roleById.get(roleId)?.name ?? roleId).join(" ");
+    const rightRoles = right.roleIds.map((roleId) => roleById.get(roleId)?.name ?? roleId).join(" ");
+    result = leftRoles.localeCompare(rightRoles, undefined, { sensitivity: "base" }) || left.roleIds.length - right.roleIds.length;
+  }
+  if (result === 0) {
+    result = memberDisplayName(left).localeCompare(memberDisplayName(right), undefined, { sensitivity: "base" });
+  }
+  return result * directionMultiplier;
+}
+
+function visibleMemberPages(currentPage: number, pageCount: number): Array<number | "ellipsis-left" | "ellipsis-right"> {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
+  }
+  const pages = new Set([1, pageCount]);
+  for (let page = Math.max(2, currentPage - 2); page <= Math.min(pageCount - 1, currentPage + 2); page += 1) {
+    pages.add(page);
+  }
+  const ordered = Array.from(pages).sort((left, right) => left - right);
+  const result: Array<number | "ellipsis-left" | "ellipsis-right"> = [];
+  for (let index = 0; index < ordered.length; index += 1) {
+    const page = ordered[index];
+    const previous = ordered[index - 1];
+    if (previous && page - previous > 1) {
+      result.push(previous === 1 ? "ellipsis-left" : "ellipsis-right");
+    }
+    result.push(page);
+  }
+  return result;
+}
+
+function ServerMembersPanel({
+  guildId,
+  botId,
+  members,
+  roles,
+  configuredMemberCount,
+  readOnly,
+  labels,
+  onCommand,
+  onToast,
+}: {
+  guildId: string;
+  botId: string | null;
+  members: GuildMemberSummary[];
+  roles: RoleSummary[];
+  configuredMemberCount: number;
+  readOnly: boolean;
+  labels: ServerSettingsText;
+  onCommand: (command: ClientCommand) => void;
+  onToast: (message: string, tone?: AppToast["tone"]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<MemberSortKey>("displayName");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [rolePickerUserId, setRolePickerUserId] = useState<string | null>(null);
+  const roleById = useMemo(
+    () => new Map(roles.map((role) => [role.id, role])),
+    [roles],
+  );
+  const filteredMembers = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const visibleMembers = normalizedQuery
+      ? members.filter((member) => {
+          const roleNames = member.roleIds.map((roleId) => roleById.get(roleId)?.name ?? roleId);
+          return memberSearchValue(member, roleNames).includes(normalizedQuery);
+        })
+      : members;
+    return [...visibleMembers].sort((left, right) => compareMemberRows(left, right, sortKey, sortDirection, roleById));
+  }, [members, query, roleById, sortDirection, sortKey]);
+  const pageCount = Math.max(1, Math.ceil(filteredMembers.length / SERVER_MEMBERS_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageMembers = filteredMembers.slice(
+    (safePage - 1) * SERVER_MEMBERS_PAGE_SIZE,
+    safePage * SERVER_MEMBERS_PAGE_SIZE,
+  );
+  const pageNumbers = visibleMemberPages(safePage, pageCount);
+  const canManageRoles = Boolean(botId) && !readOnly;
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, members.length, sortDirection, sortKey]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  useEffect(() => {
+    if (rolePickerUserId && !members.some((member) => member.userId === rolePickerUserId)) {
+      setRolePickerUserId(null);
+    }
+  }, [members, rolePickerUserId]);
+
+  const toggleSort = (nextSortKey: MemberSortKey) => {
+    setSortKey((currentSortKey) => {
+      if (currentSortKey !== nextSortKey) {
+        setSortDirection(nextSortKey === "joinedAt" ? "desc" : "asc");
+        return nextSortKey;
+      }
+      setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+      return currentSortKey;
+    });
+  };
+
+  const sortLabel = (nextSortKey: MemberSortKey) => {
+    if (sortKey !== nextSortKey) return labels.membersSortInactive;
+    return sortDirection === "asc" ? labels.membersSortAscending : labels.membersSortDescending;
+  };
+
+  const sortIndicator = (nextSortKey: MemberSortKey) => {
+    if (sortKey !== nextSortKey) return "↕";
+    return sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const changeMemberRole = (member: GuildMemberSummary, role: RoleSummary, action: "add" | "remove") => {
+    if (readOnly) {
+      onToast(labels.readOnlyModeActionBlocked, "warning");
+      return;
+    }
+    if (!botId) {
+      onToast(labels.noActiveBot, "warning");
+      return;
+    }
+    if (role.managed) return;
+    onCommand({
+      requestId: crypto.randomUUID(),
+      botId,
+      type: action === "add" ? "member.role.add" : "member.role.remove",
+      guildId,
+      userId: member.userId,
+      roleId: role.id,
+    } satisfies ClientCommand);
+    setRolePickerUserId(null);
+    onToast(
+      action === "add"
+        ? labels.memberRoleAdding(roleDisplayName(role, labels), memberDisplayName(member))
+        : labels.memberRoleRemoving(roleDisplayName(role, labels), memberDisplayName(member)),
+      "info",
+    );
+  };
+
+  const sortableHeader = (key: MemberSortKey, label: string) => (
+    <Button variant="unstyled" type="button" onClick={() => toggleSort(key)} title={sortLabel(key)}>
+      <span>{label}</span>
+      <small aria-hidden="true">{sortIndicator(key)}</small>
+    </Button>
+  );
+
+  return (
+    <Panel className="serverSettingsFormSurface serverMembersPanel">
+      <div className="discordSettingsBlockHeader serverMembersHeader">
+        <div>
+          <h3>{labels.serverMembersTitle}</h3>
+          <p>{labels.serverMembersHelp}</p>
+        </div>
+        <Badge as="small" tone="muted">
+          {labels.membersResultSummary(filteredMembers.length, configuredMemberCount || members.length)}
+        </Badge>
+      </div>
+
+      <section className="discordSettingsBlock serverMembersSearchBlock">
+        <label className="serverSettingsField serverMembersSearchField">
+          <span>{labels.membersSearchLabel}</span>
+          <Input
+            type="search"
+            value={query}
+            placeholder={labels.membersSearchPlaceholder}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </section>
+
+      <section className="serverMembersListCard" aria-label={labels.serverMembersTitle}>
+        {members.length === 0 ? (
+          <p className="serverMembersEmpty">{labels.membersEmpty}</p>
+        ) : pageMembers.length === 0 ? (
+          <p className="serverMembersEmpty">{labels.membersNoResults}</p>
+        ) : (
+          <div className="serverMembersTableScroller">
+            <table className="serverMembersTable">
+              <thead>
+                <tr>
+                  <th scope="col" aria-sort={sortKey === "displayName" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                    {sortableHeader("displayName", labels.memberColumnUsername)}
+                  </th>
+                  <th scope="col" aria-sort={sortKey === "joinedAt" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                    {sortableHeader("joinedAt", labels.memberJoinedAt)}
+                  </th>
+                  <th scope="col" aria-sort={sortKey === "roles" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                    {sortableHeader("roles", labels.memberRoles)}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageMembers.map((member) => {
+                  const memberName = memberDisplayName(member);
+                  const memberRoles = memberRoleSummaries(member, roles);
+                  const availableRoles = memberAvailableRoles(member, roles);
+                  const pickerOpen = rolePickerUserId === member.userId;
+                  return (
+                    <tr className="serverMemberTableRow" key={member.userId}>
+                      <td>
+                        <div className="serverMemberPseudoCell">
+                          <strong>{memberName}</strong>
+                          {member.bot ? (
+                            <Badge as="small" tone="app" size="sm">
+                              {labels.memberBotBadge}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="serverMemberJoinedValue">{formatMemberJoinedAt(member.joinedAt, labels)}</span>
+                      </td>
+                      <td>
+                        <div className="serverMemberRolesCell">
+                          <div className="serverMemberRolePills">
+                            {memberRoles.length ? (
+                              memberRoles.map((role) => {
+                                const roleName = roleDisplayName(role, labels);
+                                const roleDisabled = !canManageRoles || role.managed;
+                                return (
+                                  <span
+                                    key={role.id}
+                                    className={`serverMemberRolePill${role.managed ? " isManaged" : ""}`}
+                                    style={{ "--role-color": roleColorValue(role) } as CSSProperties}
+                                  >
+                                    <span className="serverMemberRoleSwatch" aria-hidden="true" />
+                                    <span>{roleName}</span>
+                                    <Button
+                                      variant="unstyled"
+                                      type="button"
+                                      className="serverMemberRoleRemove"
+                                      disabled={roleDisabled}
+                                      title={role.managed ? labels.memberManagedRole : labels.memberRemoveRole(roleName)}
+                                      aria-label={labels.memberRemoveRole(roleName)}
+                                      onClick={() => changeMemberRole(member, role, "remove")}
+                                    >
+                                      ×
+                                    </Button>
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="serverMemberNoRoles">{labels.memberNoRoles}</span>
+                            )}
+                            <Button
+                              variant="unstyled"
+                              type="button"
+                              className="serverMemberRoleAdd"
+                              disabled={!canManageRoles}
+                              title={canManageRoles ? labels.memberAddRole : labels.readOnlyModeTooltip}
+                              aria-expanded={pickerOpen}
+                              aria-label={labels.memberAddRole}
+                              onClick={() => setRolePickerUserId((current) => current === member.userId ? null : member.userId)}
+                            >
+                              +
+                            </Button>
+                          </div>
+                          {pickerOpen ? (
+                            <div className="serverMemberRolePicker">
+                              {availableRoles.length ? (
+                                availableRoles.map((role) => {
+                                  const roleName = roleDisplayName(role, labels);
+                                  return (
+                                    <Button
+                                      key={role.id}
+                                      variant="unstyled"
+                                      type="button"
+                                      style={{ "--role-color": roleColorValue(role) } as CSSProperties}
+                                      onClick={() => changeMemberRole(member, role, "add")}
+                                    >
+                                      <span className="serverMemberRoleSwatch" aria-hidden="true" />
+                                      <span>{roleName}</span>
+                                    </Button>
+                                  );
+                                })
+                              ) : (
+                                <p>{labels.memberNoRoleToAdd}</p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <nav className="serverMembersPagination" aria-label={labels.membersPageStatus(safePage, pageCount)}>
+        <Button
+          variant="unstyled"
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => setPage((current) => Math.max(1, current - 1))}
+        >
+          {labels.membersPreviousPage}
+        </Button>
+        <div className="serverMembersPageNumbers">
+          {pageNumbers.map((pageNumber) =>
+            typeof pageNumber === "number" ? (
+              <Button
+                key={pageNumber}
+                variant="unstyled"
+                type="button"
+                className={pageNumber === safePage ? "isActive" : ""}
+                aria-current={pageNumber === safePage ? "page" : undefined}
+                onClick={() => setPage(pageNumber)}
+              >
+                {pageNumber}
+              </Button>
+            ) : (
+              <span key={pageNumber}>…</span>
+            ),
+          )}
+        </div>
+        <Button
+          variant="unstyled"
+          type="button"
+          disabled={safePage >= pageCount}
+          onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+        >
+          {labels.membersNextPage}
+        </Button>
+      </nav>
+      <p className="serverMembersPageStatus">{labels.membersPageStatus(safePage, pageCount)}</p>
+    </Panel>
+  );
+}
+
 export function ServerSettingsPanel({
   guild,
   channels,
@@ -2065,6 +2485,7 @@ export function ServerSettingsPanel({
   >(() => roleAutomationDrafts(config?.roleAutomation ?? null));
   const [roleAutomationModal, setRoleAutomationModal] =
     useState<RoleAutomationModalTarget>(null);
+  const memberFetchKeyRef = useRef<string | null>(null);
   const textChannels = channels.filter(
     (channel) => channel.type === "text",
   ).length;
@@ -2116,8 +2537,21 @@ export function ServerSettingsPanel({
   }, [botId, guild.id]);
 
   useEffect(() => {
-    if (readOnly && tab !== "overview") setTab("overview");
+    if (readOnly && tab !== "overview" && tab !== "members") setTab("overview");
   }, [readOnly, tab]);
+
+  useEffect(() => {
+    if (tab !== "members" || !botId) return;
+    const fetchKey = `${botId}:${guild.id}`;
+    if (memberFetchKeyRef.current === fetchKey) return;
+    memberFetchKeyRef.current = fetchKey;
+    onCommand({
+      requestId: crypto.randomUUID(),
+      botId,
+      type: "guild.members.fetch",
+      guildId: guild.id,
+    } satisfies ClientCommand);
+  }, [botId, guild.id, onCommand, tab]);
 
   const commandBase = () => ({
     requestId: crypto.randomUUID(),
@@ -2426,7 +2860,7 @@ export function ServerSettingsPanel({
     ? labels.readOnlyModeTooltip
     : undefined;
   const openServerSettingsTab = (nextTab: ServerSettingsTab) => {
-    if (readOnly && nextTab !== "overview") {
+    if (readOnly && nextTab !== "overview" && nextTab !== "members") {
       onToast(labels.readOnlyModeTooltip, "warning");
       return;
     }
@@ -2483,6 +2917,13 @@ export function ServerSettingsPanel({
               onClick={() => openServerSettingsTab("overview")}
             >
               {labels.overviewTab}
+            </TabButton>
+            <TabButton
+              active={tab === "members"}
+              type="button"
+              onClick={() => openServerSettingsTab("members")}
+            >
+              {labels.membersTab}
             </TabButton>
             <TabButton
               active={tab === "automations"}
@@ -2603,6 +3044,20 @@ export function ServerSettingsPanel({
                   </Card>
                 </section>
               </Panel>
+            ) : null}
+
+            {tab === "members" ? (
+              <ServerMembersPanel
+                guildId={guild.id}
+                botId={botId}
+                members={members}
+                roles={roles}
+                configuredMemberCount={configuredMemberCount}
+                readOnly={readOnly}
+                labels={labels}
+                onCommand={onCommand}
+                onToast={onToast}
+              />
             ) : null}
 
             {tab === "automations" ? (

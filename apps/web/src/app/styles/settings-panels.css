@@ -201,3 +201,421 @@
 	right: 8px !important;
 	bottom: 6px !important;
 }
+
+/* Annuaire des membres dans les paramètres serveur. */
+.serverMembersPanel {
+	gap: 16px !important;
+}
+
+.serverMembersHeader {
+	display: flex !important;
+	align-items: flex-start !important;
+	justify-content: space-between !important;
+	gap: 16px !important;
+}
+
+.serverMembersSearchBlock {
+	padding: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+.serverMembersSearchField {
+	display: grid;
+	gap: 8px;
+}
+
+.serverMembersSearchField span {
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: rgba(202, 216, 222, 0.72);
+}
+
+.serverMembersSearchField input {
+	min-height: 44px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.09);
+	background: rgba(4, 10, 15, 0.42);
+}
+
+.serverMembersListCard {
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid rgba(255, 255, 255, 0.075);
+	border-radius: 18px;
+	background:
+		linear-gradient(145deg, rgba(255, 255, 255, 0.032), transparent 46%),
+		rgba(9, 16, 23, 0.56);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.serverMembersTableScroller {
+	max-height: min(56vh, 620px);
+	overflow: auto;
+	scrollbar-gutter: stable;
+	overscroll-behavior: contain;
+}
+
+.serverMembersTable {
+	width: 100%;
+	min-width: 0;
+	border-collapse: separate;
+	border-spacing: 0;
+	table-layout: fixed;
+}
+
+.serverMembersTable th:nth-child(1),
+.serverMembersTable td:nth-child(1) {
+	width: 28%;
+}
+
+.serverMembersTable th:nth-child(2),
+.serverMembersTable td:nth-child(2) {
+	width: 170px;
+}
+
+.serverMembersTable th:nth-child(3),
+.serverMembersTable td:nth-child(3) {
+	width: auto;
+}
+
+.serverMembersTable th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 0;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+	background: rgba(8, 15, 22, 0.96);
+	backdrop-filter: blur(14px);
+}
+
+.serverMembersTable th button {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 0;
+	background: transparent;
+	color: rgba(202, 216, 222, 0.76);
+	font-size: 0.72rem;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	text-align: left;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.serverMembersTable th button:hover,
+.serverMembersTable th[aria-sort="ascending"] button,
+.serverMembersTable th[aria-sort="descending"] button {
+	color: rgba(244, 252, 249, 0.96);
+	background: rgba(255, 255, 255, 0.035);
+}
+
+.serverMembersTable th small {
+	font-size: 0.76rem;
+	line-height: 1;
+	color: rgba(118, 153, 255, 0.9);
+}
+
+.serverMembersTable td {
+	padding: 12px 14px;
+	vertical-align: middle;
+	border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.serverMembersTable td:nth-child(2) {
+	white-space: nowrap;
+}
+
+.serverMembersTable td:nth-child(3) .serverMemberRolesCell {
+	min-width: 0;
+}
+
+.serverMemberTableRow:first-child td {
+	border-top: 0;
+}
+
+.serverMemberTableRow:hover td {
+	background: rgba(255, 255, 255, 0.025);
+}
+
+.serverMemberPseudoCell {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.serverMemberPseudoCell strong {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.9rem;
+	color: rgba(244, 252, 249, 0.96);
+}
+
+.serverMemberIdentityCell {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.serverMemberAvatar {
+	display: grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 50%;
+	background: rgba(88, 101, 242, 0.22);
+	color: rgba(255, 255, 255, 0.94);
+	font-weight: 900;
+	overflow: hidden;
+}
+
+.serverMemberAvatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.serverMemberMain {
+	display: grid;
+	min-width: 0;
+	gap: 4px;
+}
+
+.serverMemberNameLine {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.serverMemberNameLine strong,
+.serverMemberUsername,
+.serverMemberId,
+.serverMemberJoinedValue {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.serverMemberNameLine strong {
+	font-size: 0.94rem;
+	color: rgba(244, 252, 249, 0.96);
+}
+
+.serverMemberUsername,
+.serverMemberId,
+.serverMemberJoinedValue {
+	font-size: 0.8rem;
+	color: rgba(202, 216, 222, 0.7);
+}
+
+.serverMemberRolePills {
+	display: flex !important;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.serverMemberRolePill,
+.serverMemberRolePicker button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 220px;
+	min-height: 28px;
+	padding: 4px 6px 4px 8px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.045);
+	font-size: 0.74rem;
+	font-style: normal;
+	font-weight: 750;
+	color: rgba(239, 249, 246, 0.84);
+}
+
+.serverMemberRolePill>span:nth-child(2),
+.serverMemberRolePicker button>span:nth-child(2) {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.serverMemberRoleSwatch {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--role-color, rgba(255, 255, 255, 0.16));
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.045);
+}
+
+.serverMemberRoleRemove,
+.serverMemberRoleAdd {
+	display: inline-grid !important;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	min-width: 20px;
+	border: 1px solid rgba(255, 255, 255, 0.08) !important;
+	border-radius: 999px !important;
+	background: rgba(255, 255, 255, 0.05) !important;
+	color: rgba(244, 252, 249, 0.82) !important;
+	font-size: 0.86rem;
+	font-weight: 900;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.serverMemberRoleRemove:hover:not(:disabled) {
+	border-color: rgba(248, 113, 113, 0.36) !important;
+	background: rgba(248, 113, 113, 0.12) !important;
+	color: #fff !important;
+}
+
+.serverMemberRoleAdd:hover:not(:disabled),
+.serverMemberRoleAdd[aria-expanded="true"] {
+	border-color: rgba(88, 101, 242, 0.42) !important;
+	background: rgba(88, 101, 242, 0.16) !important;
+	color: #fff !important;
+}
+
+.serverMemberRoleRemove:disabled,
+.serverMemberRoleAdd:disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+
+.serverMemberRolePill.isManaged {
+	opacity: 0.72;
+}
+
+.serverMemberNoRoles {
+	font-size: 0.78rem;
+	color: rgba(202, 216, 222, 0.58);
+}
+
+.serverMemberRolesCell {
+	position: relative;
+	display: grid;
+	gap: 8px;
+}
+
+.serverMemberRolePicker {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 8px;
+	border: 1px solid rgba(88, 101, 242, 0.18);
+	border-radius: 14px;
+	background: rgba(6, 12, 19, 0.82);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.serverMemberRolePicker button {
+	max-width: 180px;
+	cursor: pointer;
+}
+
+.serverMemberRolePicker button:hover {
+	border-color: rgba(88, 101, 242, 0.34);
+	background: rgba(88, 101, 242, 0.14);
+	color: #fff;
+}
+
+.serverMemberRolePicker p {
+	margin: 0;
+	font-size: 0.78rem;
+	color: rgba(202, 216, 222, 0.64);
+}
+
+.serverMembersEmpty {
+	margin: 0;
+	padding: 26px;
+	text-align: center;
+	color: rgba(202, 216, 222, 0.72);
+}
+
+.serverMembersPagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.serverMembersPagination button,
+.serverMembersPageNumbers span {
+	min-width: 36px;
+	min-height: 36px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.045);
+	color: rgba(239, 249, 246, 0.82);
+	font-weight: 800;
+}
+
+.serverMembersPagination button {
+	padding: 0 12px;
+	cursor: pointer;
+}
+
+.serverMembersPagination button:hover:not(:disabled),
+.serverMembersPagination button.isActive {
+	border-color: rgba(88, 101, 242, 0.34);
+	background: rgba(88, 101, 242, 0.16);
+	color: #fff;
+}
+
+.serverMembersPagination button:disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+
+.serverMembersPageNumbers {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.serverMembersPageNumbers span {
+	display: grid;
+	place-items: center;
+	border-color: transparent;
+	background: transparent;
+	color: rgba(202, 216, 222, 0.62);
+}
+
+.serverMembersPageStatus {
+	margin: -4px 0 0;
+	text-align: center;
+	font-size: 0.78rem;
+	color: rgba(202, 216, 222, 0.64);
+}
+
+@media (max-width: 860px) {
+	.serverMembersHeader,
+	.serverMembersPagination {
+		align-items: stretch !important;
+		flex-direction: column;
+	}
+
+	.serverMembersTable th:nth-child(2),
+	.serverMembersTable td:nth-child(2) {
+		width: 140px;
+	}
+}
