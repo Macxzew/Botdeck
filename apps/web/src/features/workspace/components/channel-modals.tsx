@@ -40,7 +40,7 @@ export function ChannelRecreateModal({
   onConfirm: () => void;
 }) {
   return (
-    <Modal surfaceClassName="botModal channelRecreateModal" aria-label={language === "fr" ? "Confirmer la réinitialisation du salon" : "Confirm channel reset"} onClose={onClose}>
+    <Modal surfaceClassName="botModal actionConfirmModal channelRecreateModal" aria-label={language === "fr" ? "Confirmer la réinitialisation du salon" : "Confirm channel reset"} onClose={onClose}>
         <div className="botModalHeader channelRecreateHeader">
           <div className="channelRecreateTitleGroup">
             <span className="channelRecreateIcon" aria-hidden="true">↻</span>
@@ -113,7 +113,7 @@ export function ChannelDeleteModal({
   onConfirm: () => void;
 }) {
   return (
-    <Modal surfaceClassName="botModal" aria-label={language === "fr" ? "Confirmer la suppression" : "Confirm deletion"} onClose={onClose}>
+    <Modal surfaceClassName="botModal actionConfirmModal" aria-label={language === "fr" ? "Confirmer la suppression" : "Confirm deletion"} onClose={onClose}>
         <div className="botModalHeader">
           <p className="eyebrow">{target.type === "category" ? (language === "fr" ? "Supprimer la catégorie" : "Delete category") : (language === "fr" ? "Supprimer le salon" : "Delete channel")}</p>
           <Button variant="unstyled" className="modalClose" type="button" onClick={onClose}>×</Button>

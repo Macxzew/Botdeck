@@ -127,3 +127,17 @@ test("backend cleanup slices remain in place", () => {
 	assert.ok(bootstrapLines < 330, "database bootstrap should stay split");
 	assert.ok(botSessionLines < 1900, "bot session should not grow back past cleanup threshold");
 });
+
+
+test("about modal displays the release version from package metadata", () => {
+	const nextConfig = read("apps/web/next.config.ts");
+	const launcherViews = read("apps/web/src/features/workspace/components/botdeck-launcher-views.tsx");
+	const styles = read("apps/web/src/app/styles/first-launch.css");
+
+	assert.match(nextConfig, /rootPackage\.version/);
+	assert.match(nextConfig, /NEXT_PUBLIC_BOTDECK_VERSION/);
+	assert.match(launcherViews, /BOTDECK_VERSION/);
+	assert.match(launcherViews, /projectInfoMeta/);
+	assert.match(launcherViews, /v\{BOTDECK_VERSION\}/);
+	assert.match(styles, /\.projectInfoMeta\b/);
+});

@@ -297,6 +297,20 @@ test("bot settings navigation uses the shared server tab styling", () => {
 	assert.match(botSettingsNav, /<TabButton active=\{tab === "interface"\}/);
 });
 
+
+test("destructive confirmation modals use compact headers without separators", () => {
+	const actions = read("apps/web/src/features/members/components/member-moderation-actions.tsx");
+	const channelModals = read("apps/web/src/features/workspace/components/channel-modals.tsx");
+	const messageOverlays = read("apps/web/src/features/messages/components/message-overlays.tsx");
+	const css = read("apps/web/src/app/styles/modal-unified.css");
+
+	assert.match(actions, /surfaceClassName="botModal actionConfirmModal memberModerationModal"/);
+	assert.match(channelModals, /surfaceClassName="botModal actionConfirmModal channelRecreateModal"/);
+	assert.match(channelModals, /surfaceClassName="botModal actionConfirmModal" aria-label=\{language === "fr" \? "Confirmer la suppression" : "Confirm deletion"\}/);
+	assert.match(messageOverlays, /surfaceClassName="botModal actionConfirmModal" aria-label=\{text\.confirmRemoveBot\}/);
+	assert.match(css, /\.actionConfirmModal \.botModalHeader \{[^}]*border-bottom: 0 !important;[^}]*padding-bottom: 0;/s);
+});
+
 test("server member context menu supports kick and ban reason modals", () => {
 	const app = read("apps/web/src/components/botdeck-app.tsx");
 	const panels = read("apps/web/src/components/botdeck-app-panels.tsx");

@@ -68,6 +68,8 @@ const CreatorAvatar = ({ className }: { className?: string }) => {
 	return <img className={className} src="https://github.com/Macxzew.png?size=180" alt="" draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 };
 
+const BOTDECK_VERSION = process.env.NEXT_PUBLIC_BOTDECK_VERSION || "1.0.0";
+
 const SparkIcon = () => (
 	<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 		<path d="M12 2.8 14.1 8l5.4 2-5.4 2-2.1 5.2L9.9 12l-5.4-2 5.4-2L12 2.8Z" />
@@ -788,6 +790,10 @@ export function BotdeckProjectModal({ language, onClose, onExternalLink }: { lan
 					</div>
 				</div>
 				<div className="projectInfoBody">
+					<div className="projectInfoMeta" aria-label={isFrench ? `Version de Botdeck ${BOTDECK_VERSION}` : `Botdeck version ${BOTDECK_VERSION}`}>
+						<span>{isFrench ? "Version" : "Version"}</span>
+						<strong>v{BOTDECK_VERSION}</strong>
+					</div>
 					<div className="projectInfoCreator">
 						<CreatorAvatar />
 						<div>

@@ -92,7 +92,7 @@ export function MemberModerationModal({
 	};
 
 	return (
-		<Modal surfaceClassName="botModal memberModerationModal" aria-label={actionLabel} onClose={onCancel}>
+		<Modal surfaceClassName="botModal actionConfirmModal memberModerationModal" aria-label={actionLabel} onClose={onCancel}>
 			<form onSubmit={submit}>
 				<div className="botModalHeader">
 					<p className="eyebrow">{text.moderation}</p>

@@ -42,7 +42,7 @@ export function ConfirmDeleteModal({
   text: UiText;
 }) {
   return (
-    <Modal surfaceClassName="botModal" aria-label={text.confirmRemoveBot} onClose={loading ? undefined : onCancel}>
+    <Modal surfaceClassName="botModal actionConfirmModal" aria-label={text.confirmRemoveBot} onClose={loading ? undefined : onCancel}>
         <div className="botModalHeader">
           <p className="eyebrow">{text.removeBot}</p>
           <Button

@@ -1615,3 +1615,30 @@ body.isResizingChannelSidebar .channelSidebarResizeHandle::after {
 	justify-self: end;
 	color: var(--muted-text);
 }
+
+/* Compact confirmation modals keep the header clean without the old separator line. */
+.actionConfirmModal {
+	display: grid;
+	gap: 14px;
+}
+
+.actionConfirmModal form {
+	display: grid;
+	gap: 14px;
+}
+
+.actionConfirmModal .botModalHeader {
+	border-bottom: 0 !important;
+	padding-bottom: 0;
+}
+
+.actionConfirmModal h2,
+.actionConfirmModal .subtle,
+.actionConfirmModal .modalActions,
+.actionConfirmModal .memberModerationReasonField {
+	margin-top: 0;
+}
+
+.actionConfirmModal .modalActions {
+	padding-top: 2px;
+}
