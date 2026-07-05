@@ -18,7 +18,7 @@ import {
   type RoleSummary,
   type WorkspaceState,
 } from "@botdeck/shared";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { i18nText } from "@/features/workspace/core";
 
@@ -2029,6 +2029,14 @@ const SERVER_MEMBERS_PAGE_SIZE = 24;
 type MemberSortKey = "displayName" | "joinedAt" | "roles";
 type SortDirection = "asc" | "desc";
 
+type MemberRolePickerState = {
+  userId: string;
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
+
 function memberDisplayName(member: GuildMemberSummary): string {
   return (member.displayName?.trim() || member.username?.trim() || member.userId).trim();
 }
@@ -2165,7 +2173,7 @@ function ServerMembersPanel({
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<MemberSortKey>("displayName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [rolePickerUserId, setRolePickerUserId] = useState<string | null>(null);
+  const [rolePicker, setRolePicker] = useState<MemberRolePickerState | null>(null);
   const roleById = useMemo(
     () => new Map(roles.map((role) => [role.id, role])),
     [roles],
@@ -2198,10 +2206,35 @@ function ServerMembersPanel({
   }, [page, pageCount]);
 
   useEffect(() => {
-    if (rolePickerUserId && !members.some((member) => member.userId === rolePickerUserId)) {
-      setRolePickerUserId(null);
+    if (rolePicker && !members.some((member) => member.userId === rolePicker.userId)) {
+      setRolePicker(null);
     }
-  }, [members, rolePickerUserId]);
+  }, [members, rolePicker]);
+
+  useEffect(() => {
+    if (!rolePicker) return;
+
+    const closePicker = () => setRolePicker(null);
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".serverMemberRolePicker") || target?.closest(".serverMemberRoleAdd")) return;
+      closePicker();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePicker();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closePicker);
+    window.addEventListener("scroll", closePicker, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closePicker);
+      window.removeEventListener("scroll", closePicker, true);
+    };
+  }, [rolePicker]);
 
   const toggleSort = (nextSortKey: MemberSortKey) => {
     setSortKey((currentSortKey) => {
@@ -2242,7 +2275,7 @@ function ServerMembersPanel({
       userId: member.userId,
       roleId: role.id,
     } satisfies ClientCommand);
-    setRolePickerUserId(null);
+    setRolePicker(null);
     onToast(
       action === "add"
         ? labels.memberRoleAdding(roleDisplayName(role, labels), memberDisplayName(member))
@@ -2251,8 +2284,30 @@ function ServerMembersPanel({
     );
   };
 
+  const toggleMemberRolePicker = (member: GuildMemberSummary, anchor: HTMLButtonElement) => {
+    if (!canManageRoles) return;
+    setRolePicker((current) => {
+      if (current?.userId === member.userId) return null;
+      const rect = anchor.getBoundingClientRect();
+      const viewportPadding = 12;
+      const width = Math.min(320, Math.max(240, window.innerWidth - viewportPadding * 2));
+      const maxHeight = Math.min(280, Math.max(160, window.innerHeight - viewportPadding * 2));
+      const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
+      const left = Math.min(Math.max(viewportPadding, rect.right - width), maxLeft);
+      const belowTop = rect.bottom + 8;
+      const aboveTop = rect.top - maxHeight - 8;
+      const top = belowTop + maxHeight <= window.innerHeight - viewportPadding
+        ? belowTop
+        : Math.max(viewportPadding, aboveTop);
+      return { userId: member.userId, top, left, width, maxHeight };
+    });
+  };
+
+  const rolePickerMember = rolePicker ? members.find((member) => member.userId === rolePicker.userId) ?? null : null;
+  const rolePickerAvailableRoles = rolePickerMember ? memberAvailableRoles(rolePickerMember, roles) : [];
+
   const sortableHeader = (key: MemberSortKey, label: string) => (
-    <Button variant="unstyled" type="button" onClick={() => toggleSort(key)} title={sortLabel(key)}>
+    <Button variant="unstyled" type="button" className="serverMembersSortButton" onClick={() => toggleSort(key)} title={sortLabel(key)}>
       <span>{label}</span>
       <small aria-hidden="true">{sortIndicator(key)}</small>
     </Button>
@@ -2260,19 +2315,19 @@ function ServerMembersPanel({
 
   return (
     <Panel className="serverSettingsFormSurface serverMembersPanel">
-      <div className="discordSettingsBlockHeader serverMembersHeader">
-        <div>
-          <h3>{labels.serverMembersTitle}</h3>
-          <p>{labels.serverMembersHelp}</p>
-        </div>
-        <Badge as="small" tone="muted">
-          {labels.membersResultSummary(filteredMembers.length, configuredMemberCount || members.length)}
-        </Badge>
+      <div className="discordSettingsBlockHeader">
+        <h3>{labels.serverMembersTitle}</h3>
+        <p>{labels.serverMembersHelp}</p>
       </div>
 
-      <section className="discordSettingsBlock serverMembersSearchBlock">
+      <section className="serverMembersToolbar" aria-label={labels.membersSearchLabel}>
         <label className="serverSettingsField serverMembersSearchField">
-          <span>{labels.membersSearchLabel}</span>
+          <span className="serverMembersSearchHeader">
+            <span>{labels.membersSearchLabel}</span>
+            <Badge as="small" tone="muted">
+              {labels.membersResultSummary(filteredMembers.length, configuredMemberCount || members.length)}
+            </Badge>
+          </span>
           <Input
             type="search"
             value={query}
@@ -2288,120 +2343,142 @@ function ServerMembersPanel({
         ) : pageMembers.length === 0 ? (
           <p className="serverMembersEmpty">{labels.membersNoResults}</p>
         ) : (
-          <div className="serverMembersTableScroller">
-            <table className="serverMembersTable">
-              <thead>
-                <tr>
-                  <th scope="col" aria-sort={sortKey === "displayName" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
-                    {sortableHeader("displayName", labels.memberColumnUsername)}
-                  </th>
-                  <th scope="col" aria-sort={sortKey === "joinedAt" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
-                    {sortableHeader("joinedAt", labels.memberJoinedAt)}
-                  </th>
-                  <th scope="col" aria-sort={sortKey === "roles" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
-                    {sortableHeader("roles", labels.memberRoles)}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageMembers.map((member) => {
-                  const memberName = memberDisplayName(member);
-                  const memberRoles = memberRoleSummaries(member, roles);
-                  const availableRoles = memberAvailableRoles(member, roles);
-                  const pickerOpen = rolePickerUserId === member.userId;
-                  return (
-                    <tr className="serverMemberTableRow" key={member.userId}>
-                      <td>
-                        <div className="serverMemberPseudoCell">
-                          <strong>{memberName}</strong>
-                          {member.bot ? (
-                            <Badge as="small" tone="app" size="sm">
-                              {labels.memberBotBadge}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="serverMemberJoinedValue">{formatMemberJoinedAt(member.joinedAt, labels)}</span>
-                      </td>
-                      <td>
-                        <div className="serverMemberRolesCell">
-                          <div className="serverMemberRolePills">
-                            {memberRoles.length ? (
-                              memberRoles.map((role) => {
-                                const roleName = roleDisplayName(role, labels);
-                                const roleDisabled = !canManageRoles || role.managed;
-                                return (
-                                  <span
-                                    key={role.id}
-                                    className={`serverMemberRolePill${role.managed ? " isManaged" : ""}`}
-                                    style={{ "--role-color": roleColorValue(role) } as CSSProperties}
-                                  >
-                                    <span className="serverMemberRoleSwatch" aria-hidden="true" />
-                                    <span>{roleName}</span>
-                                    <Button
-                                      variant="unstyled"
-                                      type="button"
-                                      className="serverMemberRoleRemove"
-                                      disabled={roleDisabled}
-                                      title={role.managed ? labels.memberManagedRole : labels.memberRemoveRole(roleName)}
-                                      aria-label={labels.memberRemoveRole(roleName)}
-                                      onClick={() => changeMemberRole(member, role, "remove")}
-                                    >
-                                      ×
-                                    </Button>
-                                  </span>
-                                );
-                              })
-                            ) : (
-                              <span className="serverMemberNoRoles">{labels.memberNoRoles}</span>
-                            )}
-                            <Button
-                              variant="unstyled"
-                              type="button"
-                              className="serverMemberRoleAdd"
-                              disabled={!canManageRoles}
-                              title={canManageRoles ? labels.memberAddRole : labels.readOnlyModeTooltip}
-                              aria-expanded={pickerOpen}
-                              aria-label={labels.memberAddRole}
-                              onClick={() => setRolePickerUserId((current) => current === member.userId ? null : member.userId)}
-                            >
-                              +
-                            </Button>
-                          </div>
-                          {pickerOpen ? (
-                            <div className="serverMemberRolePicker">
-                              {availableRoles.length ? (
-                                availableRoles.map((role) => {
-                                  const roleName = roleDisplayName(role, labels);
-                                  return (
-                                    <Button
-                                      key={role.id}
-                                      variant="unstyled"
-                                      type="button"
-                                      style={{ "--role-color": roleColorValue(role) } as CSSProperties}
-                                      onClick={() => changeMemberRole(member, role, "add")}
-                                    >
-                                      <span className="serverMemberRoleSwatch" aria-hidden="true" />
-                                      <span>{roleName}</span>
-                                    </Button>
-                                  );
-                                })
-                              ) : (
-                                <p>{labels.memberNoRoleToAdd}</p>
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="serverMembersTable" role="table" aria-label={labels.serverMembersTitle}>
+            <div className="serverMembersTableHeader" role="rowgroup">
+              <div className="serverMembersTableRow serverMembersTableHeaderRow" role="row">
+                <div
+                  className="serverMembersTableHeadCell"
+                  role="columnheader"
+                  aria-sort={sortKey === "displayName" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+                >
+                  {sortableHeader("displayName", labels.memberColumnUsername)}
+                </div>
+                <div
+                  className="serverMembersTableHeadCell"
+                  role="columnheader"
+                  aria-sort={sortKey === "joinedAt" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+                >
+                  {sortableHeader("joinedAt", labels.memberJoinedAt)}
+                </div>
+                <div
+                  className="serverMembersTableHeadCell"
+                  role="columnheader"
+                  aria-sort={sortKey === "roles" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+                >
+                  {sortableHeader("roles", labels.memberRoles)}
+                </div>
+              </div>
+            </div>
+
+            <div className="serverMembersTableScroller" role="rowgroup">
+              {pageMembers.map((member) => {
+                const memberName = memberDisplayName(member);
+                const memberRoles = memberRoleSummaries(member, roles);
+                const pickerOpen = rolePicker?.userId === member.userId;
+                return (
+                  <div className="serverMembersTableRow serverMemberTableRow" key={member.userId} role="row">
+                    <div className="serverMembersTableCell serverMemberPseudoCell" role="cell">
+                      <strong>{memberName}</strong>
+                      {member.bot ? (
+                        <Badge as="small" tone="app" size="sm">
+                          {labels.memberBotBadge}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="serverMembersTableCell" role="cell">
+                      <span className="serverMemberJoinedValue">{formatMemberJoinedAt(member.joinedAt, labels)}</span>
+                    </div>
+                    <div className="serverMembersTableCell serverMemberRolesCell" role="cell">
+                      <div className="serverMemberRolePills">
+                        {memberRoles.length ? (
+                          memberRoles.map((role) => {
+                            const roleName = roleDisplayName(role, labels);
+                            const roleDisabled = !canManageRoles || role.managed;
+                            return (
+                              <span
+                                key={role.id}
+                                className={`serverMemberRolePill${role.managed ? " isManaged" : ""}`}
+                                style={{ "--role-color": roleColorValue(role) } as CSSProperties}
+                              >
+                                <span className="serverMemberRoleSwatch" aria-hidden="true" />
+                                <span>{roleName}</span>
+                                <Button
+                                  variant="unstyled"
+                                  type="button"
+                                  className="serverMemberRoleRemove"
+                                  disabled={roleDisabled}
+                                  title={role.managed ? labels.memberManagedRole : labels.memberRemoveRole(roleName)}
+                                  aria-label={labels.memberRemoveRole(roleName)}
+                                  onClick={() => changeMemberRole(member, role, "remove")}
+                                >
+                                  ×
+                                </Button>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="serverMemberNoRoles">{labels.memberNoRoles}</span>
+                        )}
+                        <Button
+                          variant="unstyled"
+                          type="button"
+                          className="serverMemberRoleAdd"
+                          disabled={!canManageRoles}
+                          title={canManageRoles ? labels.memberAddRole : labels.readOnlyModeTooltip}
+                          aria-haspopup="menu"
+                          aria-expanded={pickerOpen}
+                          aria-label={labels.memberAddRole}
+                          onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
+                            event.stopPropagation();
+                            toggleMemberRolePicker(member, event.currentTarget);
+                          }}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
+
+      {rolePicker && rolePickerMember && typeof document !== "undefined" ? createPortal(
+        <div
+          className="serverMemberRolePicker serverMemberRolePickerPortal"
+          role="menu"
+          style={{
+            top: rolePicker.top,
+            left: rolePicker.left,
+            width: rolePicker.width,
+            maxHeight: rolePicker.maxHeight,
+          }}
+        >
+          {rolePickerAvailableRoles.length ? (
+            rolePickerAvailableRoles.map((role) => {
+              const roleName = roleDisplayName(role, labels);
+              return (
+                <Button
+                  key={role.id}
+                  variant="unstyled"
+                  type="button"
+                  role="menuitem"
+                  style={{ "--role-color": roleColorValue(role) } as CSSProperties}
+                  onClick={() => changeMemberRole(rolePickerMember, role, "add")}
+                >
+                  <span className="serverMemberRoleSwatch" aria-hidden="true" />
+                  <span>{roleName}</span>
+                </Button>
+              );
+            })
+          ) : (
+            <p>{labels.memberNoRoleToAdd}</p>
+          )}
+        </div>,
+        document.body,
+      ) : null}
 
       <nav className="serverMembersPagination" aria-label={labels.membersPageStatus(safePage, pageCount)}>
         <Button
