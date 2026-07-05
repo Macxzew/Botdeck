@@ -45,6 +45,8 @@ export const READ_ONLY_CHANNEL_COMMAND_TYPES = [
 	"channel.move",
 	"channel.delete",
 	"channel.recreatePurge",
+	"guild.invite.create",
+	"guild.invite.delete",
 	"forum.post.create",
 	"forum.post.delete",
 	"forum.post.archive",

@@ -48,7 +48,7 @@ const wsCommandBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function commandRateLimitProfile(commandType: string): { windowMs: number; max: number } {
 	if (/delete|ban|kick|timeout|recreate|purge|remove/i.test(commandType)) return { windowMs: 60_000, max: 10 };
-	if (/create|update|send|edit|move|pin|react|automation|role|presence|nick|archive|lock/i.test(commandType)) return { windowMs: 60_000, max: 60 };
+	if (/create|update|send|edit|move|pin|react|automation|role|invite|presence|nick|archive|lock/i.test(commandType)) return { windowMs: 60_000, max: 60 };
 	return { windowMs: 30_000, max: 120 };
 }
 
@@ -65,7 +65,7 @@ function assertWebSocketCommandRateLimit(commandType: string): void {
 }
 
 function commandShouldBeAudited(commandType: string): boolean {
-	return /delete|ban|kick|timeout|recreate|purge|remove|create|update|send|edit|move|automation|role|presence|nick|archive|lock/i.test(commandType);
+	return /delete|ban|kick|timeout|recreate|purge|remove|create|update|send|edit|move|automation|role|invite|presence|nick|archive|lock/i.test(commandType);
 }
 
 function toRoleAutomationInteger(value: unknown, max = Number.MAX_SAFE_INTEGER): number | null {
@@ -479,6 +479,15 @@ class BotdeckControlPlane {
 			case "guild.roles.fetch":
 				await bot?.enqueueAction("guild.roles.fetch", () => bot.fetchGuildRoles(command.guildId));
 				return;
+			case "guild.invites.fetch":
+				await bot?.enqueueAction("guild.invites.fetch", () => bot.fetchGuildInvites(command.guildId));
+				return;
+			case "guild.invite.create":
+				await bot?.enqueueAction("guild.invite.create", () => bot.createGuildInvite(command.guildId, command.channelId, { maxAge: command.maxAge, maxUses: command.maxUses, temporary: command.temporary, unique: command.unique, reason: command.reason }));
+				return;
+			case "guild.invite.delete":
+				await bot?.enqueueAction("guild.invite.delete", () => bot.deleteGuildInvite(command.guildId, command.code));
+				return;
 			case "guild.automation.fetch":
 				await bot?.enqueueAction("guild.automation.fetch", () => bot.syncGuildAutomationConfig(command.guildId));
 				return;
@@ -736,6 +745,8 @@ class BotdeckControlPlane {
 			Object.keys(previousState.rolesByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.rolesByGuildId : nextState.rolesByGuildId;
 		const membersByGuildId =
 			Object.keys(previousState.membersByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.membersByGuildId : nextState.membersByGuildId;
+		const invitesByGuildId =
+			Object.keys(previousState.invitesByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.invitesByGuildId : nextState.invitesByGuildId;
 		const memberProfilesByKey =
 			Object.keys(previousState.memberProfilesByKey).length > 0 && canReuseRuntimeSnapshot ? previousState.memberProfilesByKey : nextState.memberProfilesByKey;
 		const presencesByUserId =
@@ -763,6 +774,7 @@ class BotdeckControlPlane {
 			usersById,
 			rolesByGuildId,
 			membersByGuildId,
+			invitesByGuildId,
 			memberProfilesByKey,
 			presencesByUserId,
 			voiceByGuildId: previousState.voiceByGuildId,

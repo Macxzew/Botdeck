@@ -13,6 +13,7 @@ import {
   type GuildAutomationConfig,
   type GuildAutomationKind,
   type GuildAutomationMessageConfig,
+  type GuildInviteSummary,
   type GuildMemberSummary,
   type GuildRoleAutomationRuleConfig,
   type RoleSummary,
@@ -2521,11 +2522,481 @@ function ServerMembersPanel({
   );
 }
 
+
+const SERVER_INVITES_PAGE_SIZE = 18;
+
+type InviteSortKey = "code" | "channel" | "uses" | "expiresAt";
+
+type InviteCreateDraft = {
+  channelId: string;
+  maxAge: string;
+  maxUses: string;
+  temporary: boolean;
+  unique: boolean;
+};
+
+const inviteDurationOptions = [
+  { value: "1800", labelKey: "inviteDuration30m" },
+  { value: "3600", labelKey: "inviteDuration1h" },
+  { value: "21600", labelKey: "inviteDuration6h" },
+  { value: "43200", labelKey: "inviteDuration12h" },
+  { value: "86400", labelKey: "inviteDuration1d" },
+  { value: "604800", labelKey: "inviteDuration7d" },
+  { value: "0", labelKey: "inviteDurationNever" },
+] as const;
+
+const inviteMaxUsesOptions = [
+  { value: "0", labelKey: "inviteMaxUsesNone" },
+  { value: "1", labelKey: "inviteMaxUsesOne" },
+  { value: "5", labelKey: "inviteMaxUsesFive" },
+  { value: "10", labelKey: "inviteMaxUsesTen" },
+  { value: "25", labelKey: "inviteMaxUsesTwentyFive" },
+  { value: "50", labelKey: "inviteMaxUsesFifty" },
+  { value: "100", labelKey: "inviteMaxUsesHundred" },
+] as const;
+
+function inviteSearchValue(invite: GuildInviteSummary): string {
+  return [
+    invite.code,
+    invite.url,
+    invite.channelName,
+    invite.channelId,
+    invite.inviterName,
+    invite.inviterId,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+}
+
+function inviteTimestamp(value: string | null | undefined): number {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
+}
+
+function formatInviteDate(value: string | null | undefined, labels: ServerSettingsText): string {
+  if (!value) return labels.inviteNeverExpires;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return labels.inviteNeverExpires;
+  return date.toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function inviteUsesText(invite: GuildInviteSummary, labels: ServerSettingsText): string {
+  const uses = invite.uses ?? 0;
+  if (!invite.maxUses) return `${uses} / ${labels.inviteUnlimited}`;
+  return `${uses} / ${invite.maxUses}`;
+}
+
+function compareInviteRows(
+  left: GuildInviteSummary,
+  right: GuildInviteSummary,
+  sortKey: InviteSortKey,
+  direction: SortDirection,
+): number {
+  const directionMultiplier = direction === "asc" ? 1 : -1;
+  let result = 0;
+  if (sortKey === "code") {
+    result = left.code.localeCompare(right.code, undefined, { sensitivity: "base" });
+  } else if (sortKey === "channel") {
+    result = (left.channelName ?? "").localeCompare(right.channelName ?? "", undefined, { sensitivity: "base" });
+  } else if (sortKey === "uses") {
+    result = (left.uses ?? 0) - (right.uses ?? 0);
+  } else {
+    result = inviteTimestamp(left.expiresAt) - inviteTimestamp(right.expiresAt);
+  }
+  if (result === 0) result = left.code.localeCompare(right.code, undefined, { sensitivity: "base" });
+  return result * directionMultiplier;
+}
+
+function channelCanCreateInvite(channel: ChannelSummary): boolean {
+  if (channel.type === "category" || channel.type === "thread" || channel.type === "dm") return false;
+  return channel.permissions?.createInstantInvite !== false;
+}
+
+function inviteChannelLabel(channel: ChannelSummary): string {
+  const prefix = channel.type === "voice" ? "🔊" : channel.type === "forum" ? "▣" : "#";
+  return `${prefix} ${channel.name}`;
+}
+
+function ServerInviteCreateModal({
+  draft,
+  channels,
+  labels,
+  text,
+  onChange,
+  onClose,
+  onCreate,
+}: {
+  draft: InviteCreateDraft;
+  channels: ChannelSummary[];
+  labels: ServerSettingsText;
+  text: UiText;
+  onChange: (draft: InviteCreateDraft) => void;
+  onClose: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <Modal surfaceClassName="botModal actionConfirmModal serverInviteCreateModal" aria-label={labels.inviteCreateDialog} onClose={onClose}>
+      <div className="botModalHeader">
+        <p className="eyebrow">{labels.serverInvitesTitle}</p>
+        <Button variant="unstyled" className="uiButton uiButton--icon uiButton--md iconButton modalClose" type="button" aria-label={text.close} onClick={onClose}>
+          ×
+        </Button>
+      </div>
+      <div className="actionConfirmBody">
+        <h3>{labels.inviteCreateDialog}</h3>
+        <p>{labels.inviteCreateHelp}</p>
+        <div className="serverInviteCreateGrid">
+          <label className="serverSettingsField">
+            <span>{labels.inviteChannelToUse}</span>
+            <Select
+              value={draft.channelId}
+              disabled={channels.length === 0}
+              onChange={(event) => onChange({ ...draft, channelId: event.target.value })}
+            >
+              <option value="">{channels.length ? labels.selectChannelPlaceholder : labels.inviteNoChannelAvailable}</option>
+              {channels.map((channel) => (
+                <option key={channel.id} value={channel.id}>{inviteChannelLabel(channel)}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="serverSettingsField">
+            <span>{labels.inviteExpiration}</span>
+            <Select value={draft.maxAge} onChange={(event) => onChange({ ...draft, maxAge: event.target.value })}>
+              {inviteDurationOptions.map((option) => (
+                <option key={option.value} value={option.value}>{labels[option.labelKey]}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="serverSettingsField">
+            <span>{labels.inviteMaxUses}</span>
+            <Select value={draft.maxUses} onChange={(event) => onChange({ ...draft, maxUses: event.target.value })}>
+              {inviteMaxUsesOptions.map((option) => (
+                <option key={option.value} value={option.value}>{labels[option.labelKey]}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="serverInviteCheckRow">
+            <Input
+              type="checkbox"
+              checked={draft.temporary}
+              onChange={(event) => onChange({ ...draft, temporary: event.target.checked })}
+            />
+            <span>{labels.inviteTemporaryMembership}</span>
+          </label>
+          <label className="serverInviteCheckRow">
+            <Input
+              type="checkbox"
+              checked={draft.unique}
+              onChange={(event) => onChange({ ...draft, unique: event.target.checked })}
+            />
+            <span>{labels.inviteUnique}</span>
+          </label>
+        </div>
+      </div>
+      <div className="actionConfirmActions">
+        <Button variant="secondary" type="button" onClick={onClose}>{text.cancel}</Button>
+        <Button type="button" disabled={!draft.channelId} onClick={onCreate}>{labels.inviteCreate}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function ServerInvitesPanel({
+  guildId,
+  botId,
+  invites,
+  channels,
+  readOnly,
+  labels,
+  text,
+  onCommand,
+  onToast,
+}: {
+  guildId: string;
+  botId: string | null;
+  invites: GuildInviteSummary[];
+  channels: ChannelSummary[];
+  readOnly: boolean;
+  labels: ServerSettingsText;
+  text: UiText;
+  onCommand: (command: ClientCommand) => void;
+  onToast: (message: string, tone?: AppToast["tone"]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<InviteSortKey>("code");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [createOpen, setCreateOpen] = useState(false);
+  const inviteChannels = useMemo(() => channels.filter(channelCanCreateInvite), [channels]);
+  const [draft, setDraft] = useState<InviteCreateDraft>(() => ({
+    channelId: inviteChannels[0]?.id ?? "",
+    maxAge: "86400",
+    maxUses: "0",
+    temporary: false,
+    unique: true,
+  }));
+
+  useEffect(() => {
+    if (!draft.channelId && inviteChannels[0]) {
+      setDraft((current) => ({ ...current, channelId: inviteChannels[0]?.id ?? "" }));
+    }
+  }, [draft.channelId, inviteChannels]);
+
+  const filteredInvites = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const visibleInvites = normalizedQuery
+      ? invites.filter((invite) => inviteSearchValue(invite).includes(normalizedQuery))
+      : invites;
+    return [...visibleInvites].sort((left, right) => compareInviteRows(left, right, sortKey, sortDirection));
+  }, [invites, query, sortDirection, sortKey]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredInvites.length / SERVER_INVITES_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageInvites = filteredInvites.slice(
+    (safePage - 1) * SERVER_INVITES_PAGE_SIZE,
+    safePage * SERVER_INVITES_PAGE_SIZE,
+  );
+  const pageNumbers = visibleMemberPages(safePage, pageCount);
+  const canManageInvites = Boolean(botId) && !readOnly;
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, invites.length, sortDirection, sortKey]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const toggleSort = (nextSortKey: InviteSortKey) => {
+    setSortKey((currentSortKey) => {
+      if (currentSortKey !== nextSortKey) {
+        setSortDirection(nextSortKey === "expiresAt" || nextSortKey === "uses" ? "desc" : "asc");
+        return nextSortKey;
+      }
+      setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+      return currentSortKey;
+    });
+  };
+
+  const sortLabel = (nextSortKey: InviteSortKey) => {
+    if (sortKey !== nextSortKey) return labels.membersSortInactive;
+    return sortDirection === "asc" ? labels.membersSortAscending : labels.membersSortDescending;
+  };
+
+  const sortIndicator = (nextSortKey: InviteSortKey) => {
+    if (sortKey !== nextSortKey) return "↕";
+    return sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const sortableHeader = (key: InviteSortKey, label: string) => (
+    <Button variant="unstyled" type="button" className="serverMembersSortButton" onClick={() => toggleSort(key)} title={sortLabel(key)}>
+      <span>{label}</span>
+      <small aria-hidden="true">{sortIndicator(key)}</small>
+    </Button>
+  );
+
+  const copyInvite = async (invite: GuildInviteSummary) => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(invite.url);
+    onToast(labels.inviteCopied, "success");
+  };
+
+  const createInvite = () => {
+    if (readOnly) {
+      onToast(labels.readOnlyModeActionBlocked, "warning");
+      return;
+    }
+    if (!botId) {
+      onToast(labels.noActiveBot, "warning");
+      return;
+    }
+    if (!draft.channelId) {
+      onToast(labels.inviteSelectChannelBeforeCreate, "warning");
+      return;
+    }
+    onCommand({
+      requestId: crypto.randomUUID(),
+      botId,
+      type: "guild.invite.create",
+      guildId,
+      channelId: draft.channelId,
+      maxAge: Number.parseInt(draft.maxAge, 10),
+      maxUses: Number.parseInt(draft.maxUses, 10),
+      temporary: draft.temporary,
+      unique: draft.unique,
+    } satisfies ClientCommand);
+    onToast(labels.inviteCreating, "info");
+    setCreateOpen(false);
+  };
+
+  const deleteInvite = (invite: GuildInviteSummary) => {
+    if (readOnly) {
+      onToast(labels.readOnlyModeActionBlocked, "warning");
+      return;
+    }
+    if (!botId) {
+      onToast(labels.noActiveBot, "warning");
+      return;
+    }
+    onCommand({
+      requestId: crypto.randomUUID(),
+      botId,
+      type: "guild.invite.delete",
+      guildId,
+      code: invite.code,
+    } satisfies ClientCommand);
+    onToast(labels.inviteDeleting(invite.code), "info");
+  };
+
+  return (
+    <Panel className="serverSettingsFormSurface serverInvitesPanel">
+      <div className="discordSettingsBlockHeader">
+        <h3>{labels.serverInvitesTitle}</h3>
+        <p>{labels.serverInvitesHelp}</p>
+      </div>
+
+      <section className="serverInvitesToolbar" aria-label={labels.invitesSearchLabel}>
+        <label className="serverSettingsField serverInvitesSearchField">
+          <span className="serverMembersSearchHeader">
+            <span>{labels.invitesSearchLabel}</span>
+            <Badge as="small" tone="muted">
+              {labels.invitesResultSummary(filteredInvites.length, invites.length)}
+            </Badge>
+          </span>
+          <Input
+            type="search"
+            value={query}
+            placeholder={labels.invitesSearchPlaceholder}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <Button
+          type="button"
+          disabled={!canManageInvites || inviteChannels.length === 0}
+          title={readOnly ? labels.readOnlyModeActionBlocked : inviteChannels.length === 0 ? labels.inviteNoChannelAvailable : labels.inviteCreate}
+          onClick={() => setCreateOpen(true)}
+        >
+          {labels.inviteCreate}
+        </Button>
+      </section>
+
+      <section className="serverInvitesListCard" aria-label={labels.serverInvitesTitle}>
+        {invites.length === 0 ? (
+          <p className="serverMembersEmpty">{labels.invitesEmpty}</p>
+        ) : pageInvites.length === 0 ? (
+          <p className="serverMembersEmpty">{labels.invitesNoResults}</p>
+        ) : (
+          <div className="serverInvitesTable" role="table" aria-label={labels.serverInvitesTitle}>
+            <div className="serverInvitesTableHeader" role="rowgroup">
+              <div className="serverInvitesTableRow serverInvitesTableHeaderRow" role="row">
+                <div className="serverMembersTableHeadCell" role="columnheader" aria-sort={sortKey === "code" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                  {sortableHeader("code", labels.inviteCode)}
+                </div>
+                <div className="serverMembersTableHeadCell" role="columnheader" aria-sort={sortKey === "channel" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                  {sortableHeader("channel", labels.inviteChannel)}
+                </div>
+                <div className="serverMembersTableHeadCell" role="columnheader">
+                  <span>{labels.inviteCreator}</span>
+                </div>
+                <div className="serverMembersTableHeadCell" role="columnheader" aria-sort={sortKey === "uses" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                  {sortableHeader("uses", labels.inviteUses)}
+                </div>
+                <div className="serverMembersTableHeadCell" role="columnheader" aria-sort={sortKey === "expiresAt" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}>
+                  {sortableHeader("expiresAt", labels.inviteExpires)}
+                </div>
+                <div className="serverMembersTableHeadCell" role="columnheader">
+                  <span>{labels.inviteActions}</span>
+                </div>
+              </div>
+            </div>
+            <div className="serverInvitesTableScroller" role="rowgroup">
+              {pageInvites.map((invite) => (
+                <div className="serverInvitesTableRow" key={invite.code} role="row">
+                  <div className="serverMembersTableCell serverInviteCodeCell" role="cell">
+                    <strong>{invite.code}</strong>
+                    <span>{invite.url}</span>
+                  </div>
+                  <div className="serverMembersTableCell" role="cell">{invite.channelName ? `#${invite.channelName}` : labels.notLoaded}</div>
+                  <div className="serverMembersTableCell" role="cell">{invite.inviterName ?? labels.notLoaded}</div>
+                  <div className="serverMembersTableCell" role="cell">{inviteUsesText(invite, labels)}</div>
+                  <div className="serverMembersTableCell" role="cell">
+                    <span>{formatInviteDate(invite.expiresAt, labels)}</span>
+                    <small>{invite.temporary ? labels.inviteTemporary : labels.invitePermanent}</small>
+                  </div>
+                  <div className="serverMembersTableCell serverInviteActions" role="cell">
+                    <Button variant="secondary" type="button" onClick={() => void copyInvite(invite)}>{labels.inviteCopy}</Button>
+                    <Button
+                      variant="danger"
+                      type="button"
+                      disabled={!canManageInvites}
+                      title={readOnly ? labels.readOnlyModeActionBlocked : labels.inviteDelete}
+                      onClick={() => deleteInvite(invite)}
+                    >
+                      {labels.inviteDelete}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <nav className="serverMembersPagination" aria-label={labels.invitesPageStatus(safePage, pageCount)}>
+        <Button variant="unstyled" type="button" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+          {labels.invitesPreviousPage}
+        </Button>
+        <div className="serverMembersPageNumbers">
+          {pageNumbers.map((pageNumber) =>
+            typeof pageNumber === "number" ? (
+              <Button
+                key={pageNumber}
+                variant="unstyled"
+                type="button"
+                className={pageNumber === safePage ? "isActive" : ""}
+                aria-current={pageNumber === safePage ? "page" : undefined}
+                onClick={() => setPage(pageNumber)}
+              >
+                {pageNumber}
+              </Button>
+            ) : (
+              <span key={pageNumber}>…</span>
+            ),
+          )}
+        </div>
+        <Button variant="unstyled" type="button" disabled={safePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>
+          {labels.invitesNextPage}
+        </Button>
+      </nav>
+      <p className="serverMembersPageStatus">{labels.invitesPageStatus(safePage, pageCount)}</p>
+
+      {createOpen ? (
+        <ServerInviteCreateModal
+          draft={draft}
+          channels={inviteChannels}
+          labels={labels}
+          text={text}
+          onChange={setDraft}
+          onClose={() => setCreateOpen(false)}
+          onCreate={createInvite}
+        />
+      ) : null}
+    </Panel>
+  );
+}
+
 export function ServerSettingsPanel({
   guild,
   channels,
   roles,
   members,
+  invites,
   config,
   botId,
   readOnly = false,
@@ -2538,6 +3009,7 @@ export function ServerSettingsPanel({
   channels: ChannelSummary[];
   roles: RoleSummary[];
   members: GuildMemberSummary[];
+  invites: GuildInviteSummary[];
   config: GuildAutomationConfig | null;
   botId: string | null;
   readOnly?: boolean;
@@ -2563,6 +3035,7 @@ export function ServerSettingsPanel({
   const [roleAutomationModal, setRoleAutomationModal] =
     useState<RoleAutomationModalTarget>(null);
   const memberFetchKeyRef = useRef<string | null>(null);
+  const inviteFetchKeyRef = useRef<string | null>(null);
   const textChannels = channels.filter(
     (channel) => channel.type === "text",
   ).length;
@@ -2614,7 +3087,7 @@ export function ServerSettingsPanel({
   }, [botId, guild.id]);
 
   useEffect(() => {
-    if (readOnly && tab !== "overview" && tab !== "members") setTab("overview");
+    if (readOnly && tab !== "overview" && tab !== "members" && tab !== "invites") setTab("overview");
   }, [readOnly, tab]);
 
   useEffect(() => {
@@ -2626,6 +3099,19 @@ export function ServerSettingsPanel({
       requestId: crypto.randomUUID(),
       botId,
       type: "guild.members.fetch",
+      guildId: guild.id,
+    } satisfies ClientCommand);
+  }, [botId, guild.id, onCommand, tab]);
+
+  useEffect(() => {
+    if (tab !== "invites" || !botId) return;
+    const fetchKey = `${botId}:${guild.id}`;
+    if (inviteFetchKeyRef.current === fetchKey) return;
+    inviteFetchKeyRef.current = fetchKey;
+    onCommand({
+      requestId: crypto.randomUUID(),
+      botId,
+      type: "guild.invites.fetch",
       guildId: guild.id,
     } satisfies ClientCommand);
   }, [botId, guild.id, onCommand, tab]);
@@ -2937,7 +3423,7 @@ export function ServerSettingsPanel({
     ? labels.readOnlyModeTooltip
     : undefined;
   const openServerSettingsTab = (nextTab: ServerSettingsTab) => {
-    if (readOnly && nextTab !== "overview" && nextTab !== "members") {
+    if (readOnly && nextTab !== "overview" && nextTab !== "members" && nextTab !== "invites") {
       onToast(labels.readOnlyModeTooltip, "warning");
       return;
     }
@@ -3001,6 +3487,13 @@ export function ServerSettingsPanel({
               onClick={() => openServerSettingsTab("members")}
             >
               {labels.membersTab}
+            </TabButton>
+            <TabButton
+              active={tab === "invites"}
+              type="button"
+              onClick={() => openServerSettingsTab("invites")}
+            >
+              {labels.invitesTab}
             </TabButton>
             <TabButton
               active={tab === "automations"}
@@ -3132,6 +3625,20 @@ export function ServerSettingsPanel({
                 configuredMemberCount={configuredMemberCount}
                 readOnly={readOnly}
                 labels={labels}
+                onCommand={onCommand}
+                onToast={onToast}
+              />
+            ) : null}
+
+            {tab === "invites" ? (
+              <ServerInvitesPanel
+                guildId={guild.id}
+                botId={botId}
+                invites={invites}
+                channels={channels}
+                readOnly={readOnly}
+                labels={labels}
+                text={text}
                 onCommand={onCommand}
                 onToast={onToast}
               />

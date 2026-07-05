@@ -343,7 +343,7 @@ test("server settings include a searchable paginated member directory", () => {
 	const labels = read("apps/web/src/features/server-settings/server-settings-text.ts");
 	const css = read("apps/web/src/app/styles/settings-panels.css");
 
-	assert.match(model, /ServerSettingsTab = "overview" \| "members" \| "automations" \| "templates"/);
+	assert.match(model, /ServerSettingsTab = "overview" \| "members" \| "invites" \| "automations" \| "templates"/);
 	assert.match(panel, /function ServerMembersPanel/);
 	assert.match(panel, /SERVER_MEMBERS_PAGE_SIZE = 24/);
 	assert.match(panel, /type: "guild\.members\.fetch"/);
@@ -383,4 +383,30 @@ test("server settings include a searchable paginated member directory", () => {
 	assert.match(css, /\.serverMemberRoleAdd/);
 	assert.match(css, /\.serverMemberRolePickerPortal \{[^}]*position: fixed !important;[^}]*z-index: 1400;/s);
 	assert.match(css, /\.serverMembersPagination/);
+});
+
+
+test("server settings include an invite directory with create and delete actions", () => {
+	const panel = read("apps/web/src/features/server-settings/components/server-settings-panel.tsx");
+	const model = read("apps/web/src/features/server-settings/server-automation-model.ts");
+	const labels = read("apps/web/src/features/server-settings/server-settings-text.ts");
+	const protocol = read("packages/shared/src/protocol.ts");
+	const state = read("packages/shared/src/state.ts");
+	const controlPlane = read("apps/web/src/server/control-plane.ts");
+
+	assert.match(model, /"invites"/);
+	assert.match(panel, /function ServerInvitesPanel/);
+	assert.match(panel, /SERVER_INVITES_PAGE_SIZE/);
+	assert.match(panel, /type: "guild\.invites\.fetch"/);
+	assert.match(panel, /type: "guild\.invite\.create"/);
+	assert.match(panel, /type: "guild\.invite\.delete"/);
+	assert.match(panel, /active=\{tab === "invites"\}/);
+	assert.match(panel, /labels\.invitesSearchPlaceholder/);
+	assert.match(panel, /className="serverInvitesTable"/);
+	assert.match(labels, /serverInvitesTitle: "Invitations du serveur"/);
+	assert.match(protocol, /state\.guildInvites/);
+	assert.match(protocol, /guild\.invite\.create/);
+	assert.match(state, /invitesByGuildId/);
+	assert.match(controlPlane, /bot\.createGuildInvite/);
+	assert.match(controlPlane, /bot\.deleteGuildInvite/);
 });

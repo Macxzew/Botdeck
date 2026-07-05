@@ -129,6 +129,7 @@ import {
   normalizeDirectMessageUser,
   normalizeGuild,
   normalizeGuildMember,
+  normalizeGuildInvite,
   normalizeForumPost,
   normalizeMemberProfile,
   normalizeMessage,
@@ -591,6 +592,69 @@ export async function updateGuildProfile(this: BotSessionContext,
     guild: normalizeGuild(updated),
   });
   await this.refreshGuild(updated);
+}
+
+
+export async function fetchGuildInvites(this: BotSessionContext, guildId: string): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  const invites = Array.from((await guild.invites.fetch()).values())
+    .map((invite) => normalizeGuildInvite(guild.id, invite))
+    .sort((left, right) => {
+      const leftTime = left.createdAt ? Date.parse(left.createdAt) : 0;
+      const rightTime = right.createdAt ? Date.parse(right.createdAt) : 0;
+      return rightTime - leftTime || left.code.localeCompare(right.code);
+    });
+  this.publishEvent({ type: "state.guildInvites", guildId: guild.id, invites });
+  this.publishEvent({
+    type: "audit.log",
+    level: "info",
+    message: `Fetched ${invites.length} server invite${invites.length === 1 ? "" : "s"}.`,
+    context: { botId: this.account.id, guildId: guild.id, inviteCount: invites.length },
+  });
+}
+
+export async function createGuildInvite(this: BotSessionContext,
+  guildId: string,
+  channelId: string,
+  options: {
+    maxAge?: number;
+    maxUses?: number;
+    temporary?: boolean;
+    unique?: boolean;
+    reason?: string;
+  } = {},
+): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  const channel =
+    guild.channels.cache.get(channelId) ??
+    (await guild.channels.fetch(channelId).catch(() => null));
+  if (!channel || !("createInvite" in channel) || typeof (channel as any).createInvite !== "function") {
+    throw new Error("This channel cannot create invites.");
+  }
+  await (channel as any).createInvite({
+    maxAge: Math.max(0, Math.min(604800, options.maxAge ?? 86400)),
+    maxUses: Math.max(0, Math.min(100, options.maxUses ?? 0)),
+    temporary: Boolean(options.temporary),
+    unique: options.unique !== false,
+    reason: options.reason,
+  });
+  await this.fetchGuildInvites(guildId);
+}
+
+export async function deleteGuildInvite(this: BotSessionContext, guildId: string, code: string): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  const invite = await guild.invites.fetch(code);
+  await invite.delete("Deleted from Botdeck");
+  await this.fetchGuildInvites(guildId);
 }
 
 export async function fetchGuildMembers(this: BotSessionContext, guildId: string): Promise<void> {

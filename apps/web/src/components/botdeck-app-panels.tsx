@@ -264,6 +264,7 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 					channels={activeChannels}
 					roles={workspace.rolesByGuildId[activeGuild.id] ?? []}
 					members={workspace.membersByGuildId[activeGuild.id] ?? []}
+					invites={workspace.invitesByGuildId[activeGuild.id] ?? []}
 					config={guildAutomationOverrides[activeGuild.id] ?? workspace.guildAutomationConfigsByGuildId[activeGuild.id] ?? null}
 					botId={activeBotId}
 					readOnly={activeBotReadOnly}

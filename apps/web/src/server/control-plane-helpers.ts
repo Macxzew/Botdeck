@@ -13,6 +13,7 @@ import {
 	type EmbedPayload,
 	type ForumPostSummary,
 	type ForumTagSummary,
+	type GuildInviteSummary,
 	type GuildMemberSummary,
 	type GuildSummary,
 	type MemberProfileSummary,
@@ -23,7 +24,7 @@ import {
 	type VoiceStateSummary,
 	type WorkspaceState
 } from "@botdeck/shared";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle, type ApplicationCommand, type Guild, type GuildBasedChannel, type GuildMember, type Interaction, type Message, type Role, type ThreadChannel, type User, type VoiceState } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle, type ApplicationCommand, type Guild, type GuildBasedChannel, type GuildMember, type Interaction, type Invite, type Message, type Role, type ThreadChannel, type User, type VoiceState } from "discord.js";
 import { browserCommandFailureMessage, isRecord, isUnknownApplicationCommandError, normalizeBotToken, now, safeJsonParse } from "./control-plane-primitives";
 export { browserCommandFailureMessage, isRecord, isUnknownApplicationCommandError, normalizeBotToken, now, safeJsonParse } from "./control-plane-primitives";
 export { isNonEmptyString, isOptionalString, isHistoryLimit, isPresenceStatus, isActivityType, isOptionalPresenceActivity, isOptionalPresenceActivities, customStatusEmojiToDiscord, isApplicationCommandDraftPayload, activityTypeToDiscord, isUploadAttachment, isUploadAttachmentList, embedTextLength, isEmbedPayload, isEmbedPayloadList, isReactionEmoji, isOptionalForumTagIds, isOptionalReason, isIsoStringOrNull, isOptionalDeleteMessageSeconds, isCommandEnvelope } from "./control-plane-command-validation";
@@ -994,6 +995,28 @@ export function normalizeRole(guildId: string, role: Role): RoleSummary {
 		hoist: role.hoist,
 		mentionable: role.mentionable,
 		permissions: role.permissions.bitfield.toString()
+	};
+}
+
+
+// Normalise une invitation serveur.
+export function normalizeGuildInvite(guildId: string, invite: Invite): GuildInviteSummary {
+	const channel = invite.channel as { id?: string; name?: string | null } | null;
+	const inviter = invite.inviter as { id?: string; username?: string; displayName?: string | null; tag?: string } | null;
+	return {
+		guildId,
+		code: invite.code,
+		url: invite.url ?? `https://discord.gg/${invite.code}`,
+		channelId: channel?.id ?? null,
+		channelName: channel?.name ?? null,
+		inviterId: inviter?.id ?? null,
+		inviterName: inviter?.displayName ?? inviter?.username ?? inviter?.tag ?? null,
+		uses: invite.uses ?? null,
+		maxUses: invite.maxUses ?? null,
+		maxAge: invite.maxAge ?? null,
+		temporary: invite.temporary ?? false,
+		createdAt: invite.createdAt?.toISOString() ?? null,
+		expiresAt: invite.expiresAt?.toISOString() ?? null
 	};
 }
 

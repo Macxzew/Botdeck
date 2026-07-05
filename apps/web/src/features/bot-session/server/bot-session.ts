@@ -293,6 +293,9 @@ import {
   updateGuildProfile as updateGuildProfileImpl,
   fetchGuildMembers as fetchGuildMembersImpl,
   fetchGuildRoles as fetchGuildRolesImpl,
+  fetchGuildInvites as fetchGuildInvitesImpl,
+  createGuildInvite as createGuildInviteImpl,
+  deleteGuildInvite as deleteGuildInviteImpl,
   publishGuildMembers as publishGuildMembersImpl,
   refreshGuildRoles as refreshGuildRolesImpl,
   rolePermissionsFromPayload as rolePermissionsFromPayloadImpl,
@@ -1378,6 +1381,25 @@ export class BotSession {
   public async fetchGuildRoles(guildId: string): Promise<void>
   {
     return fetchGuildRolesImpl.call(this as unknown as BotSessionContext, guildId);
+  }
+
+  public async fetchGuildInvites(guildId: string): Promise<void>
+  {
+    return fetchGuildInvitesImpl.call(this as unknown as BotSessionContext, guildId);
+  }
+
+  public async createGuildInvite(
+    guildId: string,
+    channelId: string,
+    options: { maxAge?: number; maxUses?: number; temporary?: boolean; unique?: boolean; reason?: string } = {},
+  ): Promise<void>
+  {
+    return createGuildInviteImpl.call(this as unknown as BotSessionContext, guildId, channelId, options);
+  }
+
+  public async deleteGuildInvite(guildId: string, code: string): Promise<void>
+  {
+    return deleteGuildInviteImpl.call(this as unknown as BotSessionContext, guildId, code);
   }
 
   private async publishGuildMembers(guildId: string): Promise<void>

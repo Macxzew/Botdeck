@@ -180,6 +180,14 @@ function isOptionalBoolean(value: unknown): boolean {
 	return value === undefined || typeof value === "boolean";
 }
 
+function isInviteMaxAge(value: unknown): boolean {
+	return value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 604800);
+}
+
+function isInviteMaxUses(value: unknown): boolean {
+	return value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 100);
+}
+
 // Enveloppe commande valide.
 export function isCommandEnvelope(payload: unknown): payload is ClientCommand {
 	if (!isRecord(payload) || !isNonEmptyString(payload.requestId) || !isNonEmptyString(payload.type)) return false;
@@ -254,8 +262,20 @@ export function isCommandEnvelope(payload: unknown): payload is ClientCommand {
 			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId) && isOptionalString(payload.name) && (payload.description === undefined || payload.description === null || typeof payload.description === "string") && (payload.iconDataUrl === undefined || payload.iconDataUrl === null || typeof payload.iconDataUrl === "string");
 		case "guild.members.fetch":
 		case "guild.roles.fetch":
+		case "guild.invites.fetch":
 		case "guild.automation.fetch":
 			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId);
+		case "guild.invite.delete":
+			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId) && isNonEmptyString(payload.code);
+		case "guild.invite.create":
+			return isOptionalString(payload.botId)
+				&& isNonEmptyString(payload.guildId)
+				&& isNonEmptyString(payload.channelId)
+				&& isInviteMaxAge(payload.maxAge)
+				&& isInviteMaxUses(payload.maxUses)
+				&& isOptionalBoolean(payload.temporary)
+				&& isOptionalBoolean(payload.unique)
+				&& isOptionalReason(payload.reason);
 		case "guild.automation.update":
 			return isOptionalString(payload.botId)
 				&& isNonEmptyString(payload.guildId)

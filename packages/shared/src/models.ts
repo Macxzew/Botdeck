@@ -290,6 +290,22 @@ export interface RoleSummary {
 	permissions?: string;
 }
 
+export interface GuildInviteSummary {
+	guildId: Snowflake;
+	code: string;
+	url: string;
+	channelId?: Snowflake | null;
+	channelName?: string | null;
+	inviterId?: Snowflake | null;
+	inviterName?: string | null;
+	uses?: number | null;
+	maxUses?: number | null;
+	maxAge?: number | null;
+	temporary?: boolean;
+	createdAt?: string | null;
+	expiresAt?: string | null;
+}
+
 export interface GuildMemberSummary {
 	guildId: Snowflake;
 	userId: Snowflake;
@@ -504,6 +520,7 @@ export interface WorkspaceState {
 	usersById: Record<string, UserSummary>;
 	rolesByGuildId: Record<string, RoleSummary[]>;
 	membersByGuildId: Record<string, GuildMemberSummary[]>;
+	invitesByGuildId: Record<string, GuildInviteSummary[]>;
 	guildAutomationConfigsByGuildId: Record<string, GuildAutomationConfig>;
 	memberProfilesByKey: Record<string, MemberProfileSummary>;
 	presencesByUserId: Record<string, PresenceSnapshot>;

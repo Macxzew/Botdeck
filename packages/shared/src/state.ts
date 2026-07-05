@@ -4,6 +4,7 @@ import type {
 	ChannelSummary,
 	GuildSummary,
 	ForumPostSummary,
+	GuildInviteSummary,
 	GuildMemberSummary,
 	MessageSummary,
 	WorkspaceLogEntry,
@@ -46,6 +47,7 @@ export function createWorkspaceState(partial: Partial<WorkspaceState> = {}): Wor
 		usersById: {},
 		rolesByGuildId: {},
 		membersByGuildId: {},
+		invitesByGuildId: {},
 		guildAutomationConfigsByGuildId: {},
 		memberProfilesByKey: {},
 		presencesByUserId: {},
@@ -107,6 +109,16 @@ function upsertMessages(state: WorkspaceState, channelId: string, messages: Mess
 
 
 // Remplace les posts d’un forum.
+function upsertGuildInvites(state: WorkspaceState, guildId: string, invites: GuildInviteSummary[]): WorkspaceState {
+	return {
+		...state,
+		invitesByGuildId: {
+			...state.invitesByGuildId,
+			[guildId]: invites
+		}
+	};
+}
+
 function upsertForumPosts(state: WorkspaceState, forumId: string, posts: ForumPostSummary[]): WorkspaceState {
 	return {
 		...state,
@@ -277,6 +289,8 @@ export function applyWorkspaceEvent(state: WorkspaceState, event: ClientEvent): 
 					...Object.fromEntries(event.members.map((member) => [member.userId, { id: member.userId, username: member.username, displayName: member.displayName, avatarUrl: member.avatarUrl, bot: member.bot }]))
 				}
 			};
+		case "state.guildInvites":
+			return upsertGuildInvites(state, event.guildId, event.invites);
 		case "state.guildAutomationConfig":
 			return {
 				...state,
