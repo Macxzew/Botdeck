@@ -9,6 +9,7 @@ import {
 import { type MouseEvent, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { useModalLayer } from "@/components/ui/modal-stack";
 import { Card } from "@/components/ui/panel";
 
 import {
@@ -106,6 +107,7 @@ export function MessageContextMenu({
   text: UiText;
 }) {
   const authorName = displayMessageAuthor(menu.message, author, "user");
+  const layer = useModalLayer();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x: menu.x, y: menu.y });
 
@@ -131,12 +133,13 @@ export function MessageContextMenu({
         type="button"
         aria-label={text.closeMessageMenu}
         onClick={onClose}
+        style={{ zIndex: layer.backdrop }}
       />
       <div
         ref={menuRef}
         className="messageContextMenu"
         role="menu"
-        style={{ left: position.x, top: position.y }}
+        style={{ left: position.x, top: position.y, zIndex: layer.surface }}
       >
         <Button
           variant="unstyled"

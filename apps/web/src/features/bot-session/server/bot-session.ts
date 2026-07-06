@@ -296,6 +296,9 @@ import {
   fetchGuildInvites as fetchGuildInvitesImpl,
   createGuildInvite as createGuildInviteImpl,
   deleteGuildInvite as deleteGuildInviteImpl,
+  fetchGuildBans as fetchGuildBansImpl,
+  createGuildBan as createGuildBanImpl,
+  deleteGuildBan as deleteGuildBanImpl,
   publishGuildMembers as publishGuildMembersImpl,
   refreshGuildRoles as refreshGuildRolesImpl,
   rolePermissionsFromPayload as rolePermissionsFromPayloadImpl,
@@ -1401,6 +1404,13 @@ export class BotSession {
   {
     return deleteGuildInviteImpl.call(this as unknown as BotSessionContext, guildId, code);
   }
+
+  public async fetchGuildBans(guildId: string): Promise<void> { return fetchGuildBansImpl.call(this as unknown as BotSessionContext, guildId); }
+
+  public async createGuildBan(guildId: string, userId: string, options: { reason?: string; deleteMessageSeconds?: number } = {}): Promise<void> { return createGuildBanImpl.call(this as unknown as BotSessionContext, guildId, userId, options); }
+
+  public async deleteGuildBan(guildId: string, userId: string, reason?: string): Promise<void> { return deleteGuildBanImpl.call(this as unknown as BotSessionContext, guildId, userId, reason); }
+
 
   private async publishGuildMembers(guildId: string): Promise<void>
   {

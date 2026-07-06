@@ -4,6 +4,7 @@
 
 import { Input, Select, Textarea } from "../../../components/ui/field";
 import { Modal } from "../../../components/ui/modal";
+import { useModalLayer } from "@/components/ui/modal-stack";
 import { Card, Panel, Section } from "../../../components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabButton } from "@/components/ui/tabs";
@@ -13,6 +14,7 @@ import {
   type GuildAutomationConfig,
   type GuildAutomationKind,
   type GuildAutomationMessageConfig,
+  type GuildBanSummary,
   type GuildInviteSummary,
   type GuildMemberSummary,
   type GuildRoleAutomationRuleConfig,
@@ -2159,6 +2161,8 @@ function ServerMembersPanel({
   labels,
   onCommand,
   onToast,
+  onOpenMemberContextMenu,
+  overlayLayer,
 }: {
   guildId: string;
   botId: string | null;
@@ -2169,6 +2173,8 @@ function ServerMembersPanel({
   labels: ServerSettingsText;
   onCommand: (command: ClientCommand) => void;
   onToast: (message: string, tone?: AppToast["tone"]) => void;
+  onOpenMemberContextMenu?: (event: ReactMouseEvent<HTMLElement>, guildId: string, userId: string) => boolean;
+  overlayLayer: number;
 }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -2377,7 +2383,14 @@ function ServerMembersPanel({
                 const memberRoles = memberRoleSummaries(member, roles);
                 const pickerOpen = rolePicker?.userId === member.userId;
                 return (
-                  <div className="serverMembersTableRow serverMemberTableRow" key={member.userId} role="row">
+                  <div
+                    className="serverMembersTableRow serverMemberTableRow"
+                    key={member.userId}
+                    role="row"
+                    onContextMenu={(event: ReactMouseEvent<HTMLDivElement>) => {
+                      onOpenMemberContextMenu?.(event, guildId, member.userId);
+                    }}
+                  >
                     <div className="serverMembersTableCell serverMemberPseudoCell" role="cell">
                       <strong>{memberName}</strong>
                       {member.bot ? (
@@ -2455,6 +2468,7 @@ function ServerMembersPanel({
             left: rolePicker.left,
             width: rolePicker.width,
             maxHeight: rolePicker.maxHeight,
+            zIndex: overlayLayer,
           }}
         >
           {rolePickerAvailableRoles.length ? (
@@ -2991,12 +3005,167 @@ function ServerInvitesPanel({
   );
 }
 
+const SERVER_RESOURCE_PAGE_SIZE = 18;
+
+function ServerBanCreateModal({
+  userId,
+  reason,
+  labels,
+  text,
+  onUserIdChange,
+  onReasonChange,
+  onClose,
+  onCreate,
+}: {
+  userId: string;
+  reason: string;
+  labels: ServerSettingsText;
+  text: UiText;
+  onUserIdChange: (value: string) => void;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <Modal surfaceClassName="botModal actionConfirmModal serverInviteCreateModal" aria-label={labels.banCreateDialog} onClose={onClose}>
+      <div className="botModalHeader">
+        <p className="eyebrow">{labels.serverBansTitle}</p>
+        <Button variant="unstyled" className="uiButton uiButton--icon uiButton--md iconButton modalClose" type="button" aria-label={text.close} onClick={onClose}>×</Button>
+      </div>
+      <div className="actionConfirmBody">
+        <h3>{labels.banCreateDialog}</h3>
+        <p>{labels.banCreateHelp}</p>
+        <div className="serverInviteCreateGrid">
+          <label className="serverSettingsField">
+            <span>{labels.banUserId}</span>
+            <Input value={userId} placeholder={labels.banUserIdPlaceholder} onChange={(event) => onUserIdChange(event.target.value)} />
+          </label>
+          <label className="serverSettingsField">
+            <span>{labels.banReason}</span>
+            <Textarea value={reason} placeholder={labels.banReasonPlaceholder} rows={3} maxLength={512} onChange={(event) => onReasonChange(event.target.value)} />
+          </label>
+        </div>
+      </div>
+      <div className="actionConfirmActions">
+        <Button variant="secondary" type="button" onClick={onClose}>{text.cancel}</Button>
+        <Button type="button" disabled={!userId.trim()} onClick={onCreate}>{labels.banCreate}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function ServerBansPanel({
+  guildId,
+  botId,
+  bans,
+  readOnly,
+  labels,
+  text,
+  onCommand,
+  onToast,
+}: {
+  guildId: string;
+  botId: string | null;
+  bans: GuildBanSummary[];
+  readOnly: boolean;
+  labels: ServerSettingsText;
+  text: UiText;
+  onCommand: (command: ClientCommand) => void;
+  onToast: (message: string, tone?: AppToast["tone"]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [reason, setReason] = useState("");
+  const canManage = Boolean(botId) && !readOnly;
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    const visible = normalized
+      ? bans.filter((ban) => [ban.username, ban.displayName, ban.userId, ban.reason].filter(Boolean).join(" ").toLocaleLowerCase().includes(normalized))
+      : bans;
+    return [...visible].sort((left, right) => left.username.localeCompare(right.username, undefined, { sensitivity: "base" }));
+  }, [bans, query]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / SERVER_RESOURCE_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageItems = filtered.slice((safePage - 1) * SERVER_RESOURCE_PAGE_SIZE, safePage * SERVER_RESOURCE_PAGE_SIZE);
+  const pageNumbers = visibleMemberPages(safePage, pageCount);
+
+  useEffect(() => setPage(1), [query, bans.length]);
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+
+  const createBan = () => {
+    if (readOnly) return onToast(labels.readOnlyModeActionBlocked, "warning");
+    if (!botId) return onToast(labels.noActiveBot, "warning");
+    onCommand({ requestId: crypto.randomUUID(), botId, type: "guild.ban.create", guildId, userId: userId.trim(), reason: reason.trim() || undefined } satisfies ClientCommand);
+    onToast(labels.banCreating, "info");
+    setCreateOpen(false);
+    setUserId("");
+    setReason("");
+  };
+
+  const unban = (ban: GuildBanSummary) => {
+    if (readOnly) return onToast(labels.readOnlyModeActionBlocked, "warning");
+    if (!botId) return onToast(labels.noActiveBot, "warning");
+    onCommand({ requestId: crypto.randomUUID(), botId, type: "guild.ban.delete", guildId, userId: ban.userId } satisfies ClientCommand);
+    onToast(labels.banDeleting(ban.displayName || ban.username || ban.userId), "info");
+  };
+
+  return (
+    <Panel className="serverSettingsFormSurface serverResourcePanel serverBansPanel">
+      <div className="discordSettingsBlockHeader">
+        <h3>{labels.serverBansTitle}</h3>
+        <p>{labels.serverBansHelp}</p>
+      </div>
+      <section className="serverInvitesToolbar" aria-label={labels.bansSearchLabel}>
+        <label className="serverSettingsField serverInvitesSearchField">
+          <span className="serverMembersSearchHeader">
+            <span>{labels.bansSearchLabel}</span>
+            <Badge as="small" tone="muted">{labels.bansResultSummary(filtered.length, bans.length)}</Badge>
+          </span>
+          <Input type="search" value={query} placeholder={labels.bansSearchPlaceholder} onChange={(event) => setQuery(event.target.value)} />
+        </label>
+        <Button type="button" disabled={!canManage} title={readOnly ? labels.readOnlyModeActionBlocked : labels.banCreate} onClick={() => setCreateOpen(true)}>{labels.banCreate}</Button>
+      </section>
+      <section className="serverInvitesListCard" aria-label={labels.serverBansTitle}>
+        {bans.length === 0 ? <p className="serverMembersEmpty">{labels.bansEmpty}</p> : pageItems.length === 0 ? <p className="serverMembersEmpty">{labels.bansNoResults}</p> : (
+          <div className="serverResourceTable" role="table" aria-label={labels.serverBansTitle}>
+            <div className="serverResourceTableHeader serverResourceTableRow" role="row">
+              <div role="columnheader">{labels.memberColumnUsername}</div>
+              <div role="columnheader">{labels.banUserId}</div>
+              <div role="columnheader">{labels.banReason}</div>
+              <div role="columnheader">{labels.inviteActions}</div>
+            </div>
+            <div className="serverResourceTableScroller" role="rowgroup">
+              {pageItems.map((ban) => (
+                <div className="serverResourceTableRow" key={ban.userId} role="row">
+                  <div className="serverMembersTableCell serverResourceNameCell" role="cell"><strong>{ban.displayName || ban.username}</strong><span>{ban.username}</span></div>
+                  <div className="serverMembersTableCell" role="cell">{ban.userId}</div>
+                  <div className="serverMembersTableCell" role="cell">{ban.reason || "—"}</div>
+                  <div className="serverMembersTableCell serverInviteActions" role="cell"><Button variant="danger" type="button" disabled={!canManage} onClick={() => unban(ban)}>{labels.unban}</Button></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+      <nav className="serverMembersPagination" aria-label={labels.membersPageStatus(safePage, pageCount)}>
+        <Button variant="unstyled" type="button" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>{labels.membersPreviousPage}</Button>
+        <div className="serverMembersPageNumbers">{pageNumbers.map((pageNumber) => typeof pageNumber === "number" ? <Button key={pageNumber} variant="unstyled" type="button" className={pageNumber === safePage ? "isActive" : ""} onClick={() => setPage(pageNumber)}>{pageNumber}</Button> : <span key={pageNumber}>…</span>)}</div>
+        <Button variant="unstyled" type="button" disabled={safePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>{labels.membersNextPage}</Button>
+      </nav>
+      {createOpen ? <ServerBanCreateModal userId={userId} reason={reason} labels={labels} text={text} onUserIdChange={setUserId} onReasonChange={setReason} onClose={() => setCreateOpen(false)} onCreate={createBan} /> : null}
+    </Panel>
+  );
+}
+
 export function ServerSettingsPanel({
   guild,
   channels,
   roles,
   members,
   invites,
+  bans,
   config,
   botId,
   readOnly = false,
@@ -3004,12 +3173,14 @@ export function ServerSettingsPanel({
   onToast,
   text,
   onClose,
+  onOpenMemberContextMenu,
 }: {
   guild: WorkspaceState["guilds"][number];
   channels: ChannelSummary[];
   roles: RoleSummary[];
   members: GuildMemberSummary[];
   invites: GuildInviteSummary[];
+  bans: GuildBanSummary[];
   config: GuildAutomationConfig | null;
   botId: string | null;
   readOnly?: boolean;
@@ -3017,8 +3188,10 @@ export function ServerSettingsPanel({
   onToast: (message: string, tone?: AppToast["tone"]) => void;
   text: UiText;
   onClose: () => void;
+  onOpenMemberContextMenu?: (event: ReactMouseEvent<HTMLElement>, guildId: string, userId: string) => boolean;
 }) {
   const [tab, setTab] = useState<ServerSettingsTab>("overview");
+  const layer = useModalLayer();
   const labels = serverLabels(text);
   const [welcomeDraft, setWelcomeDraft] = useState(() =>
     automationMessageDraft(config?.welcome ?? null, "welcome"),
@@ -3036,6 +3209,7 @@ export function ServerSettingsPanel({
     useState<RoleAutomationModalTarget>(null);
   const memberFetchKeyRef = useRef<string | null>(null);
   const inviteFetchKeyRef = useRef<string | null>(null);
+  const banFetchKeyRef = useRef<string | null>(null);
   const textChannels = channels.filter(
     (channel) => channel.type === "text",
   ).length;
@@ -3087,7 +3261,7 @@ export function ServerSettingsPanel({
   }, [botId, guild.id]);
 
   useEffect(() => {
-    if (readOnly && tab !== "overview" && tab !== "members" && tab !== "invites") setTab("overview");
+    if (readOnly && tab !== "overview" && tab !== "members" && tab !== "invites" && tab !== "bans") setTab("overview");
   }, [readOnly, tab]);
 
   useEffect(() => {
@@ -3115,6 +3289,16 @@ export function ServerSettingsPanel({
       guildId: guild.id,
     } satisfies ClientCommand);
   }, [botId, guild.id, onCommand, tab]);
+
+  useEffect(() => {
+    if (tab !== "bans" || !botId) return;
+    const fetchKey = `${botId}:${guild.id}`;
+    if (banFetchKeyRef.current === fetchKey) return;
+    banFetchKeyRef.current = fetchKey;
+    onCommand({ requestId: crypto.randomUUID(), botId, type: "guild.bans.fetch", guildId: guild.id } satisfies ClientCommand);
+  }, [botId, guild.id, onCommand, tab]);
+
+
 
   const commandBase = () => ({
     requestId: crypto.randomUUID(),
@@ -3423,7 +3607,7 @@ export function ServerSettingsPanel({
     ? labels.readOnlyModeTooltip
     : undefined;
   const openServerSettingsTab = (nextTab: ServerSettingsTab) => {
-    if (readOnly && nextTab !== "overview" && nextTab !== "members" && nextTab !== "invites") {
+    if (readOnly && nextTab !== "overview" && nextTab !== "members" && nextTab !== "invites" && nextTab !== "bans") {
       onToast(labels.readOnlyModeTooltip, "warning");
       return;
     }
@@ -3438,10 +3622,12 @@ export function ServerSettingsPanel({
         type="button"
         aria-label={labels.serverSettingsTitle}
         onClick={onClose}
+        style={{ "--server-settings-backdrop-z": layer.backdrop } as CSSProperties}
       />
       <aside
         className="serverSettingsPanel"
         aria-label={labels.serverSettingsTitle}
+        style={{ "--server-settings-panel-z": layer.surface } as CSSProperties}
       >
         <header className="serverSettingsHeader">
           <div className="serverSettingsIdentity">
@@ -3494,6 +3680,13 @@ export function ServerSettingsPanel({
               onClick={() => openServerSettingsTab("invites")}
             >
               {labels.invitesTab}
+            </TabButton>
+            <TabButton
+              active={tab === "bans"}
+              type="button"
+              onClick={() => openServerSettingsTab("bans")}
+            >
+              {labels.bansTab}
             </TabButton>
             <TabButton
               active={tab === "automations"}
@@ -3627,6 +3820,8 @@ export function ServerSettingsPanel({
                 labels={labels}
                 onCommand={onCommand}
                 onToast={onToast}
+                onOpenMemberContextMenu={onOpenMemberContextMenu}
+                overlayLayer={layer.surface + 2}
               />
             ) : null}
 
@@ -3643,6 +3838,20 @@ export function ServerSettingsPanel({
                 onToast={onToast}
               />
             ) : null}
+
+            {tab === "bans" ? (
+              <ServerBansPanel
+                guildId={guild.id}
+                botId={botId}
+                bans={bans}
+                readOnly={readOnly}
+                labels={labels}
+                text={text}
+                onCommand={onCommand}
+                onToast={onToast}
+              />
+            ) : null}
+
 
             {tab === "automations" ? (
               <Panel className="serverSettingsFormSurface serverAutomationPanel">

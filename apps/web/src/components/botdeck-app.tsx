@@ -2465,6 +2465,7 @@ export default function BotdeckApp() {
 				deleteGuildChannel={deleteGuildChannel}
 				memberContextMenu={memberContextMenu}
 				setMemberContextMenu={setMemberContextMenu}
+				openMemberContextMenu={openMemberContextMenu}
 				memberModerationTarget={memberModerationTarget}
 				memberModerationReason={memberModerationReason}
 				setMemberModerationReason={setMemberModerationReason}

@@ -1,4 +1,5 @@
-import type { ComponentPropsWithoutRef, ElementType, MouseEvent, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties, ElementType, MouseEvent, ReactNode } from "react";
+import { useModalLayer } from "@/components/ui/modal-stack";
 
 function joinClassNames(...classNames: Array<string | undefined | false | null>) {
 	return classNames.filter(Boolean).join(" ");
@@ -23,9 +24,11 @@ export function Modal<T extends ModalSurfaceElement = "section">({
 	onClose,
 	closeOnBackdrop = true,
 	onMouseDown,
+	style,
 	...props
 }: ModalProps<T>) {
 	const Surface = (as ?? "section") as ElementType;
+	const layer = useModalLayer();
 	const handleBackdropMouseDown = (event: MouseEvent<HTMLDivElement>) => {
 		if (closeOnBackdrop && event.target === event.currentTarget) {
 			onClose?.();
@@ -37,12 +40,18 @@ export function Modal<T extends ModalSurfaceElement = "section">({
 	};
 
 	return (
-		<div className={joinClassNames("uiModalBackdrop", backdropClassName ?? "modalBackdrop")} role="presentation" onMouseDown={handleBackdropMouseDown}>
+		<div
+			className={joinClassNames("uiModalBackdrop", backdropClassName ?? "modalBackdrop")}
+			role="presentation"
+			onMouseDown={handleBackdropMouseDown}
+			style={{ zIndex: layer.backdrop }}
+		>
 			<Surface
 				className={joinClassNames("uiModal", surfaceClassName)}
 				role="dialog"
 				aria-modal="true"
 				onMouseDown={handleSurfaceMouseDown}
+				style={{ ...(style as CSSProperties | undefined), zIndex: layer.surface }}
 				{...props}
 			>
 				{children}

@@ -595,6 +595,7 @@ export async function updateGuildProfile(this: BotSessionContext,
 }
 
 
+
 export async function fetchGuildInvites(this: BotSessionContext, guildId: string): Promise<void> {
   const guild =
     this.client.guilds.cache.get(guildId) ??
@@ -655,6 +656,36 @@ export async function deleteGuildInvite(this: BotSessionContext, guildId: string
   const invite = await guild.invites.fetch(code);
   await invite.delete("Deleted from Botdeck");
   await this.fetchGuildInvites(guildId);
+}
+
+
+export async function fetchGuildBans(this: BotSessionContext, guildId: string): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  const bans = Array.from((await guild.bans.fetch()).values())
+    .map((ban) => normalizeGuildBan(guild.id, ban))
+    .sort((left, right) => left.username.localeCompare(right.username));
+  this.publishEvent({ type: "state.guildBans", guildId: guild.id, bans });
+}
+
+export async function createGuildBan(this: BotSessionContext, guildId: string, userId: string, options: { reason?: string; deleteMessageSeconds?: number } = {}): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  await guild.bans.create(userId, { reason: options.reason, deleteMessageSeconds: options.deleteMessageSeconds });
+  await this.fetchGuildBans(guildId);
+}
+
+export async function deleteGuildBan(this: BotSessionContext, guildId: string, userId: string, reason?: string): Promise<void> {
+  const guild =
+    this.client.guilds.cache.get(guildId) ??
+    (await this.client.guilds.fetch(guildId).catch(() => null));
+  if (!guild) throw new Error("Server not found.");
+  await guild.bans.remove(userId, reason || "Unbanned from Botdeck");
+  await this.fetchGuildBans(guildId);
 }
 
 export async function fetchGuildMembers(this: BotSessionContext, guildId: string): Promise<void> {

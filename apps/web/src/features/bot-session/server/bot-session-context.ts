@@ -373,6 +373,9 @@ export interface BotSessionContext {
   fetchGuildInvites(...args: unknown[]): Promise<void>;
   createGuildInvite(...args: unknown[]): Promise<void>;
   deleteGuildInvite(...args: unknown[]): Promise<void>;
+  fetchGuildBans(...args: unknown[]): Promise<void>;
+  createGuildBan(...args: unknown[]): Promise<void>;
+  deleteGuildBan(...args: unknown[]): Promise<void>;
   publishGuildMembers(...args: unknown[]): Promise<void>;
   refreshGuildRoles(...args: unknown[]): Promise<void>;
   rolePermissionsFromPayload(value?: string | null): PermissionsBitField | undefined;

@@ -13,6 +13,7 @@ import { type CSSProperties, type FormEvent } from "react";
 import { i18nText } from "@/features/workspace/core";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { useModalLayer } from "@/components/ui/modal-stack";
 import { Card, Panel, Section } from "@/components/ui/panel";
 
 import {
@@ -434,6 +435,7 @@ export function MemberProfilePanel({
   onOpenDm: (userId: string) => void;
   text: UiText;
 }) {
+  const layer = useModalLayer();
   const isDmProfile = target.guildId === dmGuildId;
   const displayName =
     profile?.displayName ??
@@ -524,6 +526,7 @@ export function MemberProfilePanel({
         type="button"
         aria-label={text.closeMemberProfile}
         onClick={onClose}
+        style={{ zIndex: layer.backdrop }}
       />
       <aside
         className={`memberProfilePanel memberProfileRedesign${isDmProfile ? " isDmProfile" : " isServerProfile"}`}
@@ -532,6 +535,7 @@ export function MemberProfilePanel({
           {
             "--profile-accent": profileAccent,
             "--profile-banner": bannerUrl ? `url(${bannerUrl})` : undefined,
+            zIndex: layer.surface,
           } as CSSProperties
         }
       >

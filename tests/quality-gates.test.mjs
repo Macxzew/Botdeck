@@ -314,15 +314,20 @@ test("destructive confirmation modals use compact headers without separators", (
 test("server member context menu supports kick and ban reason modals", () => {
 	const app = read("apps/web/src/components/botdeck-app.tsx");
 	const panels = read("apps/web/src/components/botdeck-app-panels.tsx");
+	const serverSettings = read("apps/web/src/features/server-settings/components/server-settings-panel.tsx");
 	const messageList = read("apps/web/src/components/botdeck-message-list.tsx");
 	const channelSidebar = read("apps/web/src/components/botdeck-channel-sidebar.tsx");
 	const hook = read("apps/web/src/features/members/hooks/use-member-moderation-actions.ts");
 	const actions = read("apps/web/src/features/members/components/member-moderation-actions.tsx");
 	const i18n = read("apps/web/src/features/workspace/core/botdeck-app-i18n.ts");
+	const layoutCss = read("apps/web/src/app/styles/layout.css");
 
 	assert.match(app, /useMemberModerationActions/);
 	assert.match(messageList, /onOpenMemberContextMenu/);
 	assert.match(channelSidebar, /onOpenMemberContextMenu/);
+	assert.match(serverSettings, /onOpenMemberContextMenu\?:/);
+	assert.match(serverSettings, /onContextMenu=\{\(event: ReactMouseEvent<HTMLDivElement>\) => \{\s*onOpenMemberContextMenu\?\.\(event, guildId, member\.userId\);\s*\}\}/s);
+	assert.match(panels, /onOpenMemberContextMenu=\{openMemberContextMenu\}/);
 	assert.match(panels, /<MemberContextMenu/);
 	assert.match(panels, /<MemberModerationModal/);
 	assert.match(actions, /text\.kickMember/);
@@ -335,6 +340,8 @@ test("server member context menu supports kick and ban reason modals", () => {
 	assert.match(hook, /membersByGuildId\[guildId\]/);
 	assert.match(i18n, /kickMember: "Expulser le membre"/);
 	assert.match(i18n, /banMember: "Ban member"/);
+	assert.match(layoutCss, /\.contextMenuBackdrop \{[^}]*z-index: 1202;/s);
+	assert.match(layoutCss, /\.messageContextMenu \{[^}]*z-index: 1203;/s);
 });
 
 test("server settings include a searchable paginated member directory", () => {
@@ -343,7 +350,7 @@ test("server settings include a searchable paginated member directory", () => {
 	const labels = read("apps/web/src/features/server-settings/server-settings-text.ts");
 	const css = read("apps/web/src/app/styles/settings-panels.css");
 
-	assert.match(model, /ServerSettingsTab = "overview" \| "members" \| "invites" \| "automations" \| "templates"/);
+	assert.match(model, /ServerSettingsTab = "overview" \| "members" \| "invites" \| "bans" \| "automations" \| "templates"/);
 	assert.match(panel, /function ServerMembersPanel/);
 	assert.match(panel, /SERVER_MEMBERS_PAGE_SIZE = 24/);
 	assert.match(panel, /type: "guild\.members\.fetch"/);
@@ -409,4 +416,74 @@ test("server settings include an invite directory with create and delete actions
 	assert.match(state, /invitesByGuildId/);
 	assert.match(controlPlane, /bot\.createGuildInvite/);
 	assert.match(controlPlane, /bot\.deleteGuildInvite/);
+});
+
+test("server settings manage bans without expression categories", () => {
+	const protocol = read("packages/shared/src/protocol.ts");
+	const model = read("apps/web/src/features/server-settings/server-automation-model.ts");
+	const panel = read("apps/web/src/features/server-settings/components/server-settings-panel.tsx");
+	const session = read("apps/web/src/features/bot-session/server/bot-session-guild-channels.ts");
+	const labels = read("apps/web/src/features/server-settings/server-settings-text.ts");
+
+	assert.match(model, /"bans" \| "automations"/);
+	assert.doesNotMatch(model, /"emojis"/);
+	assert.doesNotMatch(model, /"stickers"/);
+	assert.doesNotMatch(model, /"soundboard"/);
+	for (const command of [
+		"guild.bans.fetch",
+		"guild.ban.create",
+		"guild.ban.delete"
+	]) {
+		assert.ok(protocol.includes(command), `missing protocol command ${command}`);
+		assert.ok((panel + session).includes(command), `missing implementation for ${command}`);
+	}
+	for (const removed of [
+		"guild.emojis.fetch",
+		"guild.emoji.create",
+		"guild.emoji.delete",
+		"guild.stickers.fetch",
+		"guild.sticker.create",
+		"guild.sticker.delete",
+		"guild.soundboard"
+	]) {
+		assert.ok(!protocol.includes(removed), `removed command should not stay in protocol: ${removed}`);
+		assert.ok(!(panel + session).includes(removed), `removed implementation should not stay visible: ${removed}`);
+	}
+	assert.doesNotMatch(panel, /active=\{tab === "emojis"\}/);
+	assert.doesNotMatch(panel, /active=\{tab === "stickers"\}/);
+	assert.doesNotMatch(panel, /ServerExpressionsPanel/);
+	assert.doesNotMatch(labels, /emojisTab/);
+	assert.doesNotMatch(labels, /stickersTab/);
+	assert.doesNotMatch(labels, /serverEmojisTitle/);
+	assert.doesNotMatch(labels, /serverStickersTitle/);
+});
+
+test("modal overlays use a shared stack so the latest dialog stays on top", () => {
+	const modal = read("apps/web/src/components/ui/modal.tsx");
+	const stack = read("apps/web/src/components/ui/modal-stack.ts");
+	const serverSettings = read("apps/web/src/features/server-settings/components/server-settings-panel.tsx");
+	const shellPanels = read("apps/web/src/components/botdeck-shell-panels.tsx");
+	const memberActions = read("apps/web/src/features/members/components/member-moderation-actions.tsx");
+	const messageOverlays = read("apps/web/src/features/messages/components/message-overlays.tsx");
+	const modalCss = read("apps/web/src/app/styles/modal-unified.css");
+	const launcherCss = read("apps/web/src/app/styles/launcher.css");
+
+	assert.match(stack, /MODAL_LAYER_BASE = 1400/);
+	assert.match(stack, /MODAL_LAYER_STEP = 10/);
+	assert.match(stack, /\+\+modalLayerSeed/);
+	assert.match(modal, /useModalLayer\(\)/);
+	assert.match(modal, /style=\{\{ zIndex: layer\.backdrop \}\}/);
+	assert.match(modal, /style=\{\{ \.\.\.\(style as CSSProperties \| undefined\), zIndex: layer\.surface \}\}/);
+	assert.match(serverSettings, /style=\{\{ "--server-settings-backdrop-z": layer\.backdrop \} as CSSProperties\}/);
+	assert.match(serverSettings, /style=\{\{ "--server-settings-panel-z": layer\.surface \} as CSSProperties\}/);
+	assert.match(serverSettings, /overlayLayer=\{layer\.surface \+ 2\}/);
+	assert.match(serverSettings, /zIndex: overlayLayer/);
+	assert.match(shellPanels, /style=\{\{ zIndex: layer\.backdrop \}\}/);
+	assert.match(shellPanels, /zIndex: layer\.surface/);
+	assert.match(memberActions, /useModalLayer\(\)/);
+	assert.match(memberActions, /style=\{\{ left: position\.x, top: position\.y, zIndex: layer\.surface \}\}/);
+	assert.match(messageOverlays, /useModalLayer\(\)/);
+	assert.match(messageOverlays, /style=\{\{ left: position\.x, top: position\.y, zIndex: layer\.surface \}\}/);
+	assert.match(modalCss, /z-index: var\(--server-settings-panel-z, 1201\) !important;/);
+	assert.match(launcherCss, /z-index: var\(--server-settings-backdrop-z, 1200\);/);
 });

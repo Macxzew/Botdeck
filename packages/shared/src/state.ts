@@ -48,6 +48,7 @@ export function createWorkspaceState(partial: Partial<WorkspaceState> = {}): Wor
 		rolesByGuildId: {},
 		membersByGuildId: {},
 		invitesByGuildId: {},
+		bansByGuildId: {},
 		guildAutomationConfigsByGuildId: {},
 		memberProfilesByKey: {},
 		presencesByUserId: {},
@@ -115,6 +116,16 @@ function upsertGuildInvites(state: WorkspaceState, guildId: string, invites: Gui
 		invitesByGuildId: {
 			...state.invitesByGuildId,
 			[guildId]: invites
+		}
+	};
+}
+
+function upsertGuildResource<T>(state: WorkspaceState, key: "bansByGuildId", guildId: string, items: T[]): WorkspaceState {
+	return {
+		...state,
+		[key]: {
+			...state[key],
+			[guildId]: items
 		}
 	};
 }
@@ -291,6 +302,8 @@ export function applyWorkspaceEvent(state: WorkspaceState, event: ClientEvent): 
 			};
 		case "state.guildInvites":
 			return upsertGuildInvites(state, event.guildId, event.invites);
+		case "state.guildBans":
+			return upsertGuildResource(state, "bansByGuildId", event.guildId, event.bans);
 		case "state.guildAutomationConfig":
 			return {
 				...state,

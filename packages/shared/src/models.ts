@@ -7,6 +7,7 @@ export interface GuildSummary {
 	name: string;
 	description?: string | null;
 	features?: string[];
+	premiumTier?: number | null;
 	iconUrl?: string | null;
 	bannerUrl?: string | null;
 	splashUrl?: string | null;
@@ -306,6 +307,18 @@ export interface GuildInviteSummary {
 	expiresAt?: string | null;
 }
 
+export interface GuildBanSummary {
+	guildId: Snowflake;
+	userId: Snowflake;
+	username: string;
+	displayName?: string | null;
+	avatarUrl?: string | null;
+	bot: boolean;
+	reason?: string | null;
+}
+
+
+
 export interface GuildMemberSummary {
 	guildId: Snowflake;
 	userId: Snowflake;
@@ -521,6 +534,7 @@ export interface WorkspaceState {
 	rolesByGuildId: Record<string, RoleSummary[]>;
 	membersByGuildId: Record<string, GuildMemberSummary[]>;
 	invitesByGuildId: Record<string, GuildInviteSummary[]>;
+	bansByGuildId: Record<string, GuildBanSummary[]>;
 	guildAutomationConfigsByGuildId: Record<string, GuildAutomationConfig>;
 	memberProfilesByKey: Record<string, MemberProfileSummary>;
 	presencesByUserId: Record<string, PresenceSnapshot>;

@@ -50,6 +50,7 @@ export function normalizeWorkspaceState(value: Partial<WorkspaceState> | Workspa
 		rolesByGuildId: workspace.rolesByGuildId ?? base.rolesByGuildId,
 		membersByGuildId: workspace.membersByGuildId ?? base.membersByGuildId,
 		invitesByGuildId: workspace.invitesByGuildId ?? base.invitesByGuildId,
+		bansByGuildId: workspace.bansByGuildId ?? base.bansByGuildId,
 		memberProfilesByKey: workspace.memberProfilesByKey ?? base.memberProfilesByKey,
 		presencesByUserId: workspace.presencesByUserId ?? base.presencesByUserId,
 		voiceByGuildId: workspace.voiceByGuildId ?? base.voiceByGuildId,

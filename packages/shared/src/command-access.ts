@@ -58,6 +58,8 @@ export const READ_ONLY_MODERATION_COMMAND_TYPES = [
 	"guild.role.update",
 	"guild.role.permissions.update",
 	"guild.role.delete",
+	"guild.ban.create",
+	"guild.ban.delete",
 	"member.timeout",
 	"member.kick",
 	"member.ban",

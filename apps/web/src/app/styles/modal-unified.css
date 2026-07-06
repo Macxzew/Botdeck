@@ -105,7 +105,7 @@
 	position: fixed !important;
 	top: 50% !important;
 	left: 50% !important;
-	z-index: 1201 !important;
+	z-index: var(--server-settings-panel-z, 1201) !important;
 	width: min(1180px, calc(100vw - 28px)) !important;
 	height: min(860px, calc(100vh - 28px)) !important;
 	max-height: calc(100vh - 28px) !important;

@@ -488,6 +488,15 @@ class BotdeckControlPlane {
 			case "guild.invite.delete":
 				await bot?.enqueueAction("guild.invite.delete", () => bot.deleteGuildInvite(command.guildId, command.code));
 				return;
+			case "guild.bans.fetch":
+				await bot?.enqueueAction("guild.bans.fetch", () => bot.fetchGuildBans(command.guildId));
+				return;
+			case "guild.ban.create":
+				await bot?.enqueueAction("guild.ban.create", () => bot.createGuildBan(command.guildId, command.userId, { reason: command.reason, deleteMessageSeconds: command.deleteMessageSeconds }));
+				return;
+			case "guild.ban.delete":
+				await bot?.enqueueAction("guild.ban.delete", () => bot.deleteGuildBan(command.guildId, command.userId, command.reason));
+				return;
 			case "guild.automation.fetch":
 				await bot?.enqueueAction("guild.automation.fetch", () => bot.syncGuildAutomationConfig(command.guildId));
 				return;
@@ -747,6 +756,8 @@ class BotdeckControlPlane {
 			Object.keys(previousState.membersByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.membersByGuildId : nextState.membersByGuildId;
 		const invitesByGuildId =
 			Object.keys(previousState.invitesByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.invitesByGuildId : nextState.invitesByGuildId;
+		const bansByGuildId =
+			Object.keys(previousState.bansByGuildId).length > 0 && canReuseRuntimeSnapshot ? previousState.bansByGuildId : nextState.bansByGuildId;
 		const memberProfilesByKey =
 			Object.keys(previousState.memberProfilesByKey).length > 0 && canReuseRuntimeSnapshot ? previousState.memberProfilesByKey : nextState.memberProfilesByKey;
 		const presencesByUserId =
@@ -775,6 +786,7 @@ class BotdeckControlPlane {
 			rolesByGuildId,
 			membersByGuildId,
 			invitesByGuildId,
+			bansByGuildId,
 			memberProfilesByKey,
 			presencesByUserId,
 			voiceByGuildId: previousState.voiceByGuildId,

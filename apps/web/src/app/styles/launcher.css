@@ -1570,7 +1570,7 @@ body.isResizingChannelSidebar {
 .serverSettingsBackdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 1200;
+	z-index: var(--server-settings-backdrop-z, 1200);
 	border: 0;
 	background: rgba(0, 0, 0, 0.48);
 	backdrop-filter: blur(10px);
@@ -1580,7 +1580,7 @@ body.isResizingChannelSidebar {
 	position: fixed;
 	top: 50%;
 	left: 50%;
-	z-index: 1201;
+	z-index: var(--server-settings-panel-z, 1201);
 	width: min(1180px, calc(100vw - 28px));
 	height: min(860px, calc(100vh - 28px));
 	max-height: calc(100vh - 28px);

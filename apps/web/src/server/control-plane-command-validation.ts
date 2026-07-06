@@ -263,6 +263,7 @@ export function isCommandEnvelope(payload: unknown): payload is ClientCommand {
 		case "guild.members.fetch":
 		case "guild.roles.fetch":
 		case "guild.invites.fetch":
+		case "guild.bans.fetch":
 		case "guild.automation.fetch":
 			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId);
 		case "guild.invite.delete":
@@ -276,6 +277,10 @@ export function isCommandEnvelope(payload: unknown): payload is ClientCommand {
 				&& isOptionalBoolean(payload.temporary)
 				&& isOptionalBoolean(payload.unique)
 				&& isOptionalReason(payload.reason);
+		case "guild.ban.create":
+			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId) && isNonEmptyString(payload.userId) && isOptionalReason(payload.reason) && isOptionalDeleteMessageSeconds(payload.deleteMessageSeconds);
+		case "guild.ban.delete":
+			return isOptionalString(payload.botId) && isNonEmptyString(payload.guildId) && isNonEmptyString(payload.userId) && isOptionalReason(payload.reason);
 		case "guild.automation.update":
 			return isOptionalString(payload.botId)
 				&& isNonEmptyString(payload.guildId)

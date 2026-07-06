@@ -11,6 +11,7 @@ import type {
 	GuildAutomationMessageType,
 	GuildAutomationConfig,
 	GuildRoleAutomationConditionMode,
+	GuildBanSummary,
 	GuildInviteSummary,
 	GuildMemberSummary,
 	GuildSummary,
@@ -38,6 +39,7 @@ export type ClientEvent =
 	| { type: "state.roles"; guildId: string; roles: RoleSummary[] }
 	| { type: "state.members"; guildId: string; members: GuildMemberSummary[] }
 	| { type: "state.guildInvites"; guildId: string; invites: GuildInviteSummary[] }
+	| { type: "state.guildBans"; guildId: string; bans: GuildBanSummary[] }
 	| { type: "state.guildAutomationConfig"; guildId: string; config: GuildAutomationConfig }
 	| { type: "guild.updated"; guild: GuildSummary }
 	| { type: "member.profile"; profile: MemberProfileSummary }
@@ -81,6 +83,9 @@ export type ClientCommand =
 	| (ClientCommandBase & { type: "guild.invites.fetch"; botId?: string; guildId: string })
 	| (ClientCommandBase & { type: "guild.invite.delete"; botId?: string; guildId: string; code: string })
 	| (ClientCommandBase & { type: "guild.invite.create"; botId?: string; guildId: string; channelId: string; maxAge?: number; maxUses?: number; temporary?: boolean; unique?: boolean; reason?: string })
+	| (ClientCommandBase & { type: "guild.bans.fetch"; botId?: string; guildId: string })
+	| (ClientCommandBase & { type: "guild.ban.create"; botId?: string; guildId: string; userId: string; reason?: string; deleteMessageSeconds?: number })
+	| (ClientCommandBase & { type: "guild.ban.delete"; botId?: string; guildId: string; userId: string; reason?: string })
 	| (ClientCommandBase & { type: "guild.automation.fetch"; botId?: string; guildId: string })
 	| (ClientCommandBase & {
 		type: "guild.automation.update";

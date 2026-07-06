@@ -103,6 +103,7 @@ type BotdeckAppPanelsProps = {
 	deleteGuildChannel: any;
 	memberContextMenu: any;
 	setMemberContextMenu: any;
+	openMemberContextMenu: any;
 	memberModerationTarget: any;
 	memberModerationReason: any;
 	setMemberModerationReason: any;
@@ -217,6 +218,7 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 		deleteGuildChannel,
 		memberContextMenu,
 		setMemberContextMenu,
+		openMemberContextMenu,
 		memberModerationTarget,
 		memberModerationReason,
 		setMemberModerationReason,
@@ -265,6 +267,7 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 					roles={workspace.rolesByGuildId[activeGuild.id] ?? []}
 					members={workspace.membersByGuildId[activeGuild.id] ?? []}
 					invites={workspace.invitesByGuildId[activeGuild.id] ?? []}
+					bans={workspace.bansByGuildId[activeGuild.id] ?? []}
 					config={guildAutomationOverrides[activeGuild.id] ?? workspace.guildAutomationConfigsByGuildId[activeGuild.id] ?? null}
 					botId={activeBotId}
 					readOnly={activeBotReadOnly}
@@ -285,6 +288,7 @@ export function BotdeckAppPanels(props: BotdeckAppPanelsProps) {
 					}}
 					onToast={(message, tone) => pushToast(message, tone)}
 						text={text}
+					onOpenMemberContextMenu={openMemberContextMenu}
 					onClose={() => setServerSettingsOpen(false)}
 				/>
 			) : null}

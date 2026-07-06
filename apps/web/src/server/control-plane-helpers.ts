@@ -13,6 +13,7 @@ import {
 	type EmbedPayload,
 	type ForumPostSummary,
 	type ForumTagSummary,
+	type GuildBanSummary,
 	type GuildInviteSummary,
 	type GuildMemberSummary,
 	type GuildSummary,
@@ -24,7 +25,7 @@ import {
 	type VoiceStateSummary,
 	type WorkspaceState
 } from "@botdeck/shared";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle, type ApplicationCommand, type Guild, type GuildBasedChannel, type GuildMember, type Interaction, type Invite, type Message, type Role, type ThreadChannel, type User, type VoiceState } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle, type ApplicationCommand, type Guild, type GuildBan, type GuildBasedChannel, type GuildMember, type Interaction, type Invite, type Message, type Role, type ThreadChannel, type User, type VoiceState } from "discord.js";
 import { browserCommandFailureMessage, isRecord, isUnknownApplicationCommandError, normalizeBotToken, now, safeJsonParse } from "./control-plane-primitives";
 export { browserCommandFailureMessage, isRecord, isUnknownApplicationCommandError, normalizeBotToken, now, safeJsonParse } from "./control-plane-primitives";
 export { isNonEmptyString, isOptionalString, isHistoryLimit, isPresenceStatus, isActivityType, isOptionalPresenceActivity, isOptionalPresenceActivities, customStatusEmojiToDiscord, isApplicationCommandDraftPayload, activityTypeToDiscord, isUploadAttachment, isUploadAttachmentList, embedTextLength, isEmbedPayload, isEmbedPayloadList, isReactionEmoji, isOptionalForumTagIds, isOptionalReason, isIsoStringOrNull, isOptionalDeleteMessageSeconds, isCommandEnvelope } from "./control-plane-command-validation";
@@ -916,6 +917,7 @@ export function normalizeGuild(guild: Guild): GuildSummary {
 		name: guild.name,
 		description: guild.description ?? null,
 		features: [...guild.features],
+		premiumTier: typeof guild.premiumTier === "number" ? guild.premiumTier : null,
 		iconUrl: guild.iconURL({ extension: resolvePreferredAssetExtension(guild.icon), size: 128 }),
 		bannerUrl: guild.bannerURL({ extension: resolvePreferredAssetExtension(guild.banner), size: 512 }),
 		splashUrl: guild.splashURL({ extension: resolvePreferredAssetExtension(guild.splash), size: 512 }),
@@ -995,6 +997,24 @@ export function normalizeRole(guildId: string, role: Role): RoleSummary {
 		hoist: role.hoist,
 		mentionable: role.mentionable,
 		permissions: role.permissions.bitfield.toString()
+	};
+}
+
+
+function optionalCreatedAt(value: { createdAt?: Date | null }): string | null {
+	return value.createdAt instanceof Date ? value.createdAt.toISOString() : null;
+}
+
+// Normalise un bannissement serveur.
+export function normalizeGuildBan(guildId: string, ban: GuildBan): GuildBanSummary {
+	return {
+		guildId,
+		userId: ban.user.id,
+		username: ban.user.username,
+		displayName: ban.user.globalName ?? null,
+		avatarUrl: ban.user.displayAvatarURL({ extension: resolvePreferredAssetExtension(ban.user.avatar), size: 128 }),
+		bot: ban.user.bot,
+		reason: ban.reason ?? null
 	};
 }
 

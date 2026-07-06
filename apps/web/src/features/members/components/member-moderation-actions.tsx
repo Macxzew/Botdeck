@@ -4,6 +4,7 @@ import { type FormEvent, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { useModalLayer } from "@/components/ui/modal-stack";
 import type { UiText } from "@/features/workspace/core";
 import type { MemberContextMenuState, MemberModerationAction, MemberModerationTarget } from "@/features/members/hooks/use-member-moderation-actions";
 
@@ -28,6 +29,7 @@ export function MemberContextMenu({
 	onCopyUserId: () => void;
 	text: UiText;
 }) {
+	const layer = useModalLayer();
 	const menuRef = useRef<HTMLDivElement | null>(null);
 	const [position, setPosition] = useState({ x: menu.x, y: menu.y });
 	const moderationDisabled = !canModerate || readOnlyLocked;
@@ -44,8 +46,8 @@ export function MemberContextMenu({
 
 	return (
 		<>
-			<Button variant="unstyled" className="contextMenuBackdrop" type="button" aria-label={text.closeMemberMenu} onClick={onClose} />
-			<div ref={menuRef} className="messageContextMenu memberContextMenu" role="menu" style={{ left: position.x, top: position.y }}>
+			<Button variant="unstyled" className="contextMenuBackdrop" type="button" aria-label={text.closeMemberMenu} onClick={onClose} style={{ zIndex: layer.backdrop }} />
+			<div ref={menuRef} className="messageContextMenu memberContextMenu" role="menu" style={{ left: position.x, top: position.y, zIndex: layer.surface }}>
 				<Button variant="unstyled" type="button" role="menuitem" onClick={onProfile}>
 					{text.profile} <span>{menu.displayName}</span>
 				</Button>

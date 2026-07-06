@@ -9,7 +9,7 @@ import {
 import { type ServerSettingsText } from "@/features/server-settings/server-settings-text";
 
 // Paramètres serveur.
-export type ServerSettingsTab = "overview" | "members" | "invites" | "automations" | "templates";
+export type ServerSettingsTab = "overview" | "members" | "invites" | "bans" | "automations" | "templates";
 export type AutomationMessageDraft = { channelId: string; messageType: "message" | "embed"; messageTemplate: string; embedPagesJson: string };
 export type AutomationLogsDraft = { channelId: string; eventConfigsJson: string };
 export type AutomationModalTarget = { kind: "welcome" | "goodbye" | "logs"; title: string } | null;
