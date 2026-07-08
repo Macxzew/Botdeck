@@ -29,6 +29,7 @@ import {
   AuditLogEvent,
   ChannelType,
   Client,
+  Events,
   GatewayIntentBits,
   Partials,
   PermissionFlagsBits,
@@ -174,7 +175,7 @@ import {
 
 
 export function attachHandlers(this: BotSessionContext): void {
-  this.client.once("ready", async () => {
+  this.client.once(Events.ClientReady, async () => {
     this.status = "online";
     this.lastError = null;
     this.publishEvent({

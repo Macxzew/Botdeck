@@ -109,7 +109,7 @@ export async function readTlsConfig(): Promise<BotdeckTlsConfig | null> {
 		return {
 			enabled: true,
 			mode: payload.mode === "dual" ? "dual" : "https-only",
-			host: payload.host || "127.0.0.1",
+			host: canonicalLocalHost(payload.host || "127.0.0.1"),
 			httpPort: payload.httpPort || tlsHttpPort(),
 			httpsPort: payload.httpsPort || tlsHttpsPort(),
 			certificatePath: payload.certificatePath,
@@ -125,14 +125,21 @@ export async function readTlsConfig(): Promise<BotdeckTlsConfig | null> {
 	}
 }
 
+export function canonicalLocalHost(host: string | undefined | null): string {
+	const normalized = String(host || "").trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+	if (!normalized || normalized === "localhost" || normalized === "::1" || normalized === "0.0.0.0") return "127.0.0.1";
+	return normalized;
+}
+
 export function requestHost(request: Request): string {
 	const raw = request.headers.get("x-forwarded-host") || request.headers.get("host") || "127.0.0.1:3000";
 	const withoutPort = raw.replace(/^\[/, "").replace(/\](:\d+)?$/, "");
-	return withoutPort.includes(":") && !withoutPort.includes(".") ? "localhost" : withoutPort.split(":")[0] || "127.0.0.1";
+	const host = withoutPort.includes(":") && !withoutPort.includes(".") ? "::1" : withoutPort.split(":")[0] || "127.0.0.1";
+	return canonicalLocalHost(host);
 }
 
 export function tlsUrls(request: Request, config?: Partial<BotdeckTlsConfig> | null) {
-	const host = config?.host || requestHost(request);
+	const host = canonicalLocalHost(config?.host || requestHost(request));
 	const httpPort = config?.httpPort || tlsHttpPort();
 	const httpsPort = config?.httpsPort || tlsHttpsPort();
 	return {

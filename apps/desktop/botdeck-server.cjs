@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
+const net = require("node:net");
 const path = require("node:path");
 const next = require("next");
 
@@ -49,15 +50,74 @@ function isPrivilegedPortForCurrentUser(port) {
 	return process.platform !== "win32" && typeof process.getuid === "function" && process.getuid() !== 0 && port < 1024;
 }
 
-async function startHttpFallback(handleApp, host, httpPort, reason) {
+async function startHttpFallback(handleApp, host, httpPort, reason, upgradeHandler = null) {
 	console.warn(`[botdeck:tls] HTTPS désactivé temporairement: ${reason}`);
 	console.warn(`[botdeck:tls] Ouvre l’interface en HTTP puis choisis un port supérieur à 1023, par exemple 3443.`);
-	await startServer(http.createServer(handleApp), host, httpPort, "http");
+	const fallbackServer = http.createServer(handleApp);
+	attachBotdeckWebSocketProxy(fallbackServer, upgradeHandler);
+	await startServer(fallbackServer, host, httpPort, "http");
 	console.log(`[botdeck] ready ${localUrl("http", host, httpPort)} tls=fallback`);
 }
 
 function requestLocation(request, protocol, host, port) {
 	return `${localUrl(protocol, host, port)}${request.url || "/"}`;
+}
+
+function wsProxyPort() {
+	return Number.parseInt(String(process.env.BOTDECK_WS_PORT || "3001"), 10) || 3001;
+}
+
+function isBotdeckWebSocketPath(requestUrl) {
+	try {
+		const parsed = new URL(requestUrl || "/", "http://127.0.0.1");
+		return parsed.pathname === "/botdeck-ws";
+	} catch {
+		return false;
+	}
+}
+
+function serializedUpgradeRequest(request) {
+	const rawHeaders = [];
+	for (let index = 0; index < request.rawHeaders.length; index += 2) {
+		const name = request.rawHeaders[index];
+		const value = request.rawHeaders[index + 1];
+		if (!name || value === undefined) continue;
+		rawHeaders.push(`${name}: ${value}`);
+	}
+	return `${request.method || "GET"} ${request.url || "/"} HTTP/${request.httpVersion || "1.1"}\r\n${rawHeaders.join("\r\n")}\r\n\r\n`;
+}
+
+function attachBotdeckWebSocketProxy(server, nextUpgradeHandler = null) {
+	server.on("upgrade", (request, socket, head) => {
+		if (!isBotdeckWebSocketPath(request.url)) {
+			if (typeof nextUpgradeHandler === "function") {
+				nextUpgradeHandler(request, socket, head);
+				return;
+			}
+			socket.destroy();
+			return;
+		}
+
+		const target = net.connect({ host: "127.0.0.1", port: wsProxyPort() });
+		let connected = false;
+		const closeBoth = () => {
+			target.destroy();
+			socket.destroy();
+		};
+
+		target.once("connect", () => {
+			connected = true;
+			target.write(serializedUpgradeRequest(request));
+			if (head && head.length > 0) target.write(head);
+			socket.pipe(target).pipe(socket);
+		});
+		target.once("error", (error) => {
+			if (!connected) console.warn(`[botdeck:ws-proxy] unable to reach ws://127.0.0.1:${wsProxyPort()} (${error.code || error.message || "error"})`);
+			closeBoth();
+		});
+		socket.once("error", () => target.destroy());
+		socket.once("close", () => target.destroy());
+	});
 }
 
 function startServer(server, host, port, label) {
@@ -89,6 +149,8 @@ async function main() {
 
 	await app.prepare();
 
+	const upgradeHandler = typeof app.getUpgradeHandler === "function" ? app.getUpgradeHandler() : null;
+
 	const handleApp = (request, response) => {
 		handle(request, response).catch((error) => {
 			console.error("[botdeck:http:error]", error);
@@ -98,13 +160,15 @@ async function main() {
 	};
 
 	if (!tls) {
-		await startServer(http.createServer(handleApp), host, httpPort, "http");
+		const httpServer = http.createServer(handleApp);
+		attachBotdeckWebSocketProxy(httpServer, upgradeHandler);
+		await startServer(httpServer, host, httpPort, "http");
 		console.log(`[botdeck] ready ${localUrl("http", host, httpPort)}`);
 		return;
 	}
 
 	if (isPrivilegedPortForCurrentUser(httpsPort)) {
-		await startHttpFallback(handleApp, host, httpPort, `port ${httpsPort} refusé sans droits administrateur`);
+		await startHttpFallback(handleApp, host, httpPort, `port ${httpsPort} refusé sans droits administrateur`, upgradeHandler);
 		return;
 	}
 
@@ -113,9 +177,11 @@ async function main() {
 		cert: fs.readFileSync(tls.certificatePath)
 	};
 	try {
-		await startServer(https.createServer(secureContext, handleApp), host, httpsPort, "https");
+		const httpsServer = https.createServer(secureContext, handleApp);
+		attachBotdeckWebSocketProxy(httpsServer, upgradeHandler);
+		await startServer(httpsServer, host, httpsPort, "https");
 	} catch (error) {
-		await startHttpFallback(handleApp, host, httpPort, error && error.message ? error.message : "démarrage HTTPS impossible");
+		await startHttpFallback(handleApp, host, httpPort, error && error.message ? error.message : "démarrage HTTPS impossible", upgradeHandler);
 		return;
 	}
 
@@ -129,7 +195,9 @@ async function main() {
 			response.end();
 		};
 
-	await startServer(http.createServer(httpHandler), host, httpPort, tls.mode === "dual" ? "http" : "http-redirect");
+	const httpServer = http.createServer(httpHandler);
+	attachBotdeckWebSocketProxy(httpServer, upgradeHandler);
+	await startServer(httpServer, host, httpPort, tls.mode === "dual" ? "http" : "http-redirect");
 	console.log(`[botdeck] ready ${localUrl("https", host, httpsPort)} mode=${tls.mode || "https-only"}`);
 }
 

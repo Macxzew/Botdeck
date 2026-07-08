@@ -46,6 +46,18 @@ const ROLE_AUTOMATION_MAX_MEMBER_AGE_SECONDS = 20000 * 86400;
 
 const wsCommandBuckets = new Map<string, { count: number; resetAt: number }>();
 
+function websocketListenHosts(configuredHost: string): string[] {
+	const normalized = configuredHost.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+	if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") {
+		return ["127.0.0.1", "::1"];
+	}
+	return [configuredHost];
+}
+
+function websocketHostLabel(host: string): string {
+	return host.includes(":") ? `[${host}]` : host;
+}
+
 function commandRateLimitProfile(commandType: string): { windowMs: number; max: number } {
 	if (/delete|ban|kick|timeout|recreate|purge|remove/i.test(commandType)) return { windowMs: 60_000, max: 10 };
 	if (/create|update|send|edit|move|pin|react|automation|role|invite|presence|nick|archive|lock/i.test(commandType)) return { windowMs: 60_000, max: 60 };
@@ -156,16 +168,50 @@ class BotdeckControlPlane {
 
 		await new Promise<void>((resolve, reject) => {
 			let settled = false;
+			let pending = 0;
+			let plainListening = false;
+			let secureListening = false;
 			const certificatePath = process.env.BOTDECK_TLS_CERTIFICATE_PATH;
 			const keyPath = process.env.BOTDECK_TLS_KEY_PATH;
 			const useSecureSocket = Boolean(certificatePath && keyPath && existsSync(certificatePath) && existsSync(keyPath));
 			const wssPort = Number.parseInt(process.env.BOTDECK_WSS_PORT ?? String(this.wsPort + 1), 10) || this.wsPort + 1;
+			const listenHosts = websocketListenHosts(this.wsHost);
 
-			const finish = () => {
-				if (settled) return;
+			const maybeSettle = () => {
+				if (settled || pending > 0) return;
+				if (plainListening && (!useSecureSocket || secureListening)) {
+					settled = true;
+					this.wsServerStarted = true;
+					resolve();
+					return;
+				}
 				settled = true;
-				this.wsServerStarted = true;
-				resolve();
+				reject(new Error("Botdeck WebSocket could not listen on every required loopback endpoint."));
+			};
+
+			const failStartup = (error: NodeJS.ErrnoException) => {
+				if (settled) {
+					console.error("[botdeck:ws] runtime websocket error", error);
+					return;
+				}
+				settled = true;
+				reject(error);
+			};
+
+			const markUnavailable = (label: string, error: NodeJS.ErrnoException) => {
+				const code = error.code || "UNKNOWN";
+				if (code === "EADDRINUSE") {
+					console.warn(
+						`[botdeck:ws] ${label} is already in use. ` +
+						"Keeping the HTTP app alive; stop the old process or change the WebSocket port."
+					);
+					return;
+				}
+				if (code === "EADDRNOTAVAIL" || code === "EINVAL") {
+					console.warn(`[botdeck:ws] ${label} is not available on this machine (${code}); continuing with the other loopback host.`);
+					return;
+				}
+				failStartup(error);
 			};
 
 			const handleProtocols = (protocols: Set<string>) => protocols.has("botdeck") ? "botdeck" : false;
@@ -181,58 +227,85 @@ class BotdeckControlPlane {
 				done(false, 401, "Unauthorized");
 			};
 
-			const handleError = (label: string) => (error: NodeJS.ErrnoException) => {
-				if (error.code === "EADDRINUSE") {
-					console.warn(
-						`[botdeck:ws] ${label} is already in use. ` +
-						"Keeping the HTTP app alive; stop the old process or change the WebSocket port."
-					);
-					finish();
-					return;
-				}
-
-				if (settled) {
-					console.error("[botdeck:ws] runtime websocket error", error);
-					return;
-				}
-
-				settled = true;
-				reject(error);
+			const startPlainSocket = (host: string) => {
+				let done = false;
+				const finishAttempt = () => {
+					if (done) return;
+					done = true;
+					pending -= 1;
+				};
+				pending += 1;
+				const label = `ws://${websocketHostLabel(host)}:${this.wsPort}`;
+				const wsServer = new WebSocketServer({
+					host,
+					port: this.wsPort,
+					verifyClient,
+					handleProtocols
+				});
+				wsServer.on("connection", (socket) => this.attachBrowser(socket));
+				wsServer.once("error", (error: NodeJS.ErrnoException) => {
+					finishAttempt();
+					markUnavailable(label, error);
+					maybeSettle();
+				});
+				wsServer.once("listening", () => {
+					plainListening = true;
+					finishAttempt();
+					console.info(`[botdeck:ws] listening ${label}`);
+					maybeSettle();
+				});
 			};
 
-			const wsServer = new WebSocketServer({
-				host: this.wsHost,
-				port: this.wsPort,
-				verifyClient,
-				handleProtocols
-			});
-			wsServer.on("connection", (socket) => this.attachBrowser(socket));
-			wsServer.once("error", handleError(`ws://${this.wsHost}:${this.wsPort}`));
-			wsServer.once("listening", () => {
-				console.info(`[botdeck:ws] listening ws://${this.wsHost}:${this.wsPort}`);
-				if (!useSecureSocket) finish();
-			});
-
-			if (useSecureSocket) {
+			const startSecureSocket = (host: string) => {
+				let done = false;
+				const finishAttempt = () => {
+					if (done) return;
+					done = true;
+					pending -= 1;
+				};
+				pending += 1;
+				const label = `wss://${websocketHostLabel(host)}:${wssPort}`;
 				const tlsServer = createHttpsServer({
 					cert: readFileSync(certificatePath as string),
 					key: readFileSync(keyPath as string)
 				});
 				const wssServer = new WebSocketServer({ server: tlsServer, verifyClient, handleProtocols });
 				wssServer.on("connection", (socket) => this.attachBrowser(socket));
-				wssServer.once("error", handleError(`wss://${this.wsHost}:${wssPort}`));
-				tlsServer.once("error", handleError(`wss://${this.wsHost}:${wssPort}`));
-				tlsServer.once("listening", () => {
-					console.info(`[botdeck:ws] listening wss://${this.wsHost}:${wssPort}`);
-					finish();
+				wssServer.once("error", (error: NodeJS.ErrnoException) => {
+					finishAttempt();
+					markUnavailable(label, error);
+					maybeSettle();
 				});
-				tlsServer.listen(wssPort, this.wsHost);
-			}
+				tlsServer.once("error", (error: NodeJS.ErrnoException) => {
+					finishAttempt();
+					markUnavailable(label, error);
+					maybeSettle();
+				});
+				tlsServer.once("listening", () => {
+					secureListening = true;
+					finishAttempt();
+					console.info(`[botdeck:ws] listening ${label}`);
+					maybeSettle();
+				});
+				tlsServer.listen(wssPort, host);
+			};
+
+			for (const host of listenHosts) startPlainSocket(host);
+			if (useSecureSocket) for (const host of listenHosts) startSecureSocket(host);
+
 		});
 	}
 
 	public createBrowserAuthToken(): string {
 		return createBrowserWebSocketAuthToken();
+	}
+
+	public createBrowserWebSocketUrl(request?: Request): string {
+		const hostHeader = request?.headers.get("x-forwarded-host") || request?.headers.get("host") || "127.0.0.1:3000";
+		const rawHost = hostHeader.replace(/^\[/, "").replace(/\](:\d+)?$/, "");
+		const hostname = rawHost.includes(":") && !rawHost.includes(".") ? "127.0.0.1" : (rawHost.split(":")[0] || "127.0.0.1");
+		const normalized = hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1" ? "127.0.0.1" : hostname;
+		return `ws://${normalized}:${this.wsPort}`;
 	}
 
 	public async getStatus(): Promise<{ bots: BotAccountSummary[]; workspace: WorkspaceState }> {

@@ -487,3 +487,31 @@ test("modal overlays use a shared stack so the latest dialog stays on top", () =
 	assert.match(modalCss, /z-index: var\(--server-settings-panel-z, 1201\) !important;/);
 	assert.match(launcherCss, /z-index: var\(--server-settings-backdrop-z, 1200\);/);
 });
+
+
+test("runtime startup avoids noisy database and Discord deprecation warnings", () => {
+	const bootstrap = read("apps/web/src/server/database-bootstrap.ts");
+	const botSessionHandlers = read("apps/web/src/features/bot-session/server/bot-session-event-handlers.ts");
+
+	assert.match(bootstrap, /applySqlitePragma/);
+	assert.match(bootstrap, /\$queryRawUnsafe\(statement\)/);
+	assert.match(bootstrap, /NO_UPDATE_NOTIFIER: "1"/);
+	assert.match(bootstrap, /PRISMA_HIDE_UPDATE_MESSAGE: "true"/);
+	assert.doesNotMatch(bootstrap, /\$executeRawUnsafe\("PRAGMA journal_mode = WAL"\)/);
+	assert.match(botSessionHandlers, /Events\.ClientReady/);
+	assert.doesNotMatch(botSessionHandlers, /once\(["']ready["']/);
+});
+
+test("member directory fetches avoid startup gateway rate-limit spam", () => {
+	const guildChannels = read("apps/web/src/features/bot-session/server/bot-session-guild-channels.ts");
+
+	assert.match(guildChannels, /guildMemberFetchRateLimits = new Map<string, number>\(\)/);
+	assert.match(guildChannels, /retryAfterFromMemberFetchError/);
+	assert.match(guildChannels, /Retry after \(\[0-9\]\+/);
+	assert.match(guildChannels, /Discord limite temporairement la synchronisation complète des membres/);
+	assert.match(guildChannels, /level: "info"/);
+	assert.match(guildChannels, /guildMemberFetchRateLimits\.set\(key, Date\.now\(\) \+ retryAfterMs\)/);
+	assert.match(guildChannels, /const memberCollection = guild\.members\.cache;/);
+	assert.doesNotMatch(guildChannels, /const fetchedMembers = await safeFetchGuildMembers\(this, guild\);/);
+	assert.doesNotMatch(guildChannels, /Could not fetch every server member\. Botdeck is showing cached members instead\./);
+});

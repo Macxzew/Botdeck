@@ -338,7 +338,7 @@ export default function BotdeckApp() {
 	}, [text.failedLoadWorkspace]);
 
 	const activeWorkspace = bootstrap?.workspace ?? fallbackWorkspaceState;
-	const transport = useBotdeckTransport(bootReady && Boolean(bootstrap?.wsAuthToken), activeWorkspace, bootstrap?.wsAuthToken ?? null);
+	const transport = useBotdeckTransport(bootReady && Boolean(bootstrap?.wsAuthToken), activeWorkspace, bootstrap?.wsAuthToken ?? null, bootstrap?.wsUrl ?? null);
 	const workspace = transport.workspace;
 	const forumPostsByChannel = workspace.forumPostsByChannel ?? {};
 	const status = transport.status;

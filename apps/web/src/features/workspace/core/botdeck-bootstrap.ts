@@ -4,6 +4,7 @@ export type BootstrapState = {
 	bots: BotAccountSummary[];
 	workspace: WorkspaceState;
 	wsAuthToken?: string | null;
+	wsUrl?: string | null;
 	localApiToken?: string | null;
 };
 
@@ -69,6 +70,7 @@ export function normalizeBootstrapState(value: unknown): BootstrapState {
 			bots: value.bots,
 			workspace: normalizeWorkspaceState(value.workspace),
 			wsAuthToken: typeof (value as { wsAuthToken?: unknown }).wsAuthToken === "string" ? (value as { wsAuthToken: string }).wsAuthToken : null,
+			wsUrl: typeof (value as { wsUrl?: unknown }).wsUrl === "string" ? (value as { wsUrl: string }).wsUrl : null,
 			localApiToken
 		};
 	}
@@ -81,6 +83,7 @@ export function normalizeBootstrapState(value: unknown): BootstrapState {
 			bots: Array.isArray((value as { bots?: unknown }).bots) ? ((value as { bots: BotAccountSummary[] }).bots ?? []) : [],
 			workspace: normalizeWorkspaceState(workspace),
 			wsAuthToken: typeof (value as { wsAuthToken?: unknown }).wsAuthToken === "string" ? (value as { wsAuthToken: string }).wsAuthToken : null,
+			wsUrl: typeof (value as { wsUrl?: unknown }).wsUrl === "string" ? (value as { wsUrl: string }).wsUrl : null,
 			localApiToken
 		};
 	}
@@ -90,6 +93,7 @@ export function normalizeBootstrapState(value: unknown): BootstrapState {
 		bots: [],
 		workspace: createWorkspaceState(),
 		wsAuthToken: null,
+		wsUrl: null,
 		localApiToken: null
 	};
 }

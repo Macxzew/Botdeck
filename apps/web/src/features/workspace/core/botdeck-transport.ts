@@ -15,13 +15,17 @@ export type WorkspaceReadyEvent = Extract<ClientEvent, { type: "workspace.ready"
 export type ApplicationCommandsEvent = Extract<ClientEvent, { type: "applicationCommands.list" | "applicationCommand.created" | "applicationCommand.updated" | "applicationCommand.deleted" }>;
 export type SyncQueueEvent = Extract<ClientEvent, { type: "sync.queue" }>;
 
-export function browserWebSocketBaseUrl(): string {
+const BOTDECK_WS_PATH = "/botdeck-ws";
+
+export function browserWebSocketBaseUrl(runtimeUrl?: string | null): string {
 	if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-	if (typeof window === "undefined") return "ws://localhost:3001";
+	if (typeof window === "undefined") return runtimeUrl || "ws://127.0.0.1:3001";
 	const secure = window.location.protocol === "https:";
-	const protocol = secure ? "wss:" : "ws:";
-	const hostname = window.location.hostname || "localhost";
-	return `${protocol}//${hostname}:${secure ? "3002" : "3001"}`;
+	if (secure) {
+		const host = window.location.host || "127.0.0.1:3443";
+		return `wss://${host}${BOTDECK_WS_PATH}`;
+	}
+	return runtimeUrl || "ws://127.0.0.1:3001";
 }
 
 export function authenticatedWebSocketUrl(baseUrl: string, authToken: string): string {
@@ -43,7 +47,7 @@ export function workspaceReducer(state: WorkspaceState, action: TransportEnvelop
 }
 
 // Transport live: connexion + reconnexion.
-export function useBotdeckTransport(enabled: boolean, initialWorkspace: WorkspaceState, authToken?: string | null) {
+export function useBotdeckTransport(enabled: boolean, initialWorkspace: WorkspaceState, authToken?: string | null, runtimeWsUrl?: string | null) {
 	const [workspace, dispatch] = useReducer(workspaceReducer, initialWorkspace);
 	const [status, setStatus] = useState<"booting" | "connecting" | "connected" | "disconnected" | "error">(
 		enabled ? "connecting" : "booting"
@@ -90,7 +94,7 @@ export function useBotdeckTransport(enabled: boolean, initialWorkspace: Workspac
 				return;
 			}
 
-			const socket = new WebSocket(authenticatedWebSocketUrl(browserWebSocketBaseUrl(), authToken), authenticatedWebSocketProtocols(authToken));
+			const socket = new WebSocket(authenticatedWebSocketUrl(browserWebSocketBaseUrl(runtimeWsUrl), authToken), authenticatedWebSocketProtocols(authToken));
 			socketRef.current = socket;
 
 			socket.onopen = () => {
@@ -149,7 +153,7 @@ export function useBotdeckTransport(enabled: boolean, initialWorkspace: Workspac
 			socketRef.current?.close();
 			socketRef.current = null;
 		};
-	}, [enabled, authToken]);
+	}, [enabled, authToken, runtimeWsUrl]);
 
 	return { workspace, status, socketRef, lastCommandEvent, lastWorkspaceReadyEvent, lastApplicationCommandsEvent, lastSyncQueueEvent };
 }

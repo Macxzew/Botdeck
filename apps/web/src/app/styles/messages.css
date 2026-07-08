@@ -1196,6 +1196,19 @@
 	box-shadow: var(--shadow-elevated);
 }
 
+.embedComposerUnifiedEditor {
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: 4px;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+}
+
+.embedComposerUnifiedEditor > .commandLogsVisualEmbed {
+	min-height: min-content;
+}
+
+
 .embedComposerGrid {
 	display: grid;
 	grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);

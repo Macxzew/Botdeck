@@ -141,3 +141,33 @@ test("about modal displays the release version from package metadata", () => {
 	assert.match(launcherViews, /v\{BOTDECK_VERSION\}/);
 	assert.match(styles, /\.projectInfoMeta\b/);
 });
+
+test("local WebSocket uses direct HTTP and same-origin HTTPS transports", () => {
+	const desktopServer = read("apps/desktop/botdeck-server.cjs");
+	const transport = read("apps/web/src/features/workspace/core/botdeck-transport.ts");
+	const bootstrap = read("apps/web/src/app/api/bootstrap/route.ts");
+	const controlPlane = read("apps/web/src/server/control-plane.ts");
+
+	assert.match(desktopServer, /attachBotdeckWebSocketProxy/);
+	assert.match(desktopServer, /pathname === "\/botdeck-ws"/);
+	assert.match(desktopServer, /getUpgradeHandler/);
+	assert.ok(desktopServer.indexOf("await app.prepare()") < desktopServer.indexOf("getUpgradeHandler"), "Next upgrade handler must be created after app.prepare()");
+	assert.match(transport, /BOTDECK_WS_PATH = "\/botdeck-ws"/);
+	assert.match(transport, /window\.location\.protocol === "https:"/);
+	assert.match(transport, /return runtimeUrl \|\| "ws:\/\/127\.0\.0\.1:3001"/);
+	assert.match(transport, /wss:\/\/\$\{host\}\$\{BOTDECK_WS_PATH\}/);
+	assert.match(bootstrap, /wsUrl: plane\.createBrowserWebSocketUrl\(request\)/);
+	assert.match(controlPlane, /createBrowserWebSocketUrl/);
+	assert.doesNotMatch(transport, /secure \? "3002" : "3001"/);
+});
+
+
+test("embed composer modal keeps its editor scrollable", () => {
+	const composer = read("apps/web/src/components/embeds/embed-composer.tsx");
+	const styles = read("apps/web/src/app/styles/messages.css");
+
+	assert.match(composer, /className="embedComposerUnifiedEditor"/);
+	assert.match(styles, /\.embedComposerModal\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/);
+	assert.match(styles, /\.embedComposerUnifiedEditor\s*\{[\s\S]*min-height:\s*0/);
+	assert.match(styles, /\.embedComposerUnifiedEditor\s*\{[\s\S]*overflow-y:\s*auto/);
+});

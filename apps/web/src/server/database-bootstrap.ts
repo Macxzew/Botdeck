@@ -90,12 +90,19 @@ async function hasMessageColumn(columnName: string): Promise<boolean> {
 }
 
 // Règle SQLite pour le desktop.
+// Certains PRAGMA SQLite, comme journal_mode, renvoient une ligne de résultat.
+// Prisma refuse ces statements via $executeRawUnsafe, donc on les applique
+// par $queryRawUnsafe pour éviter un faux log d’erreur au démarrage.
+async function applySqlitePragma(statement: string): Promise<void> {
+	await prisma.$queryRawUnsafe(statement);
+}
+
 async function tuneSqliteConnection(): Promise<void> {
 	try {
-		await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL");
-		await prisma.$executeRawUnsafe("PRAGMA synchronous = NORMAL");
-		await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 5000");
-		await prisma.$executeRawUnsafe("PRAGMA temp_store = MEMORY");
+		await applySqlitePragma("PRAGMA journal_mode = WAL");
+		await applySqlitePragma("PRAGMA synchronous = NORMAL");
+		await applySqlitePragma("PRAGMA busy_timeout = 5000");
+		await applySqlitePragma("PRAGMA temp_store = MEMORY");
 	} catch (error) {
 		console.warn("[botdeck:db] SQLite tuning skipped", error instanceof Error ? error.message : error);
 	}
@@ -153,7 +160,9 @@ function runPrismaCli(args: string[], action: string): void {
 			...process.env,
 			DATABASE_URL: database.url,
 			BOTDECK_DATABASE_PATH_RESOLVED: database.path ?? "",
-			BOTDECK_DATABASE_SOURCE: database.source
+			BOTDECK_DATABASE_SOURCE: database.source,
+			NO_UPDATE_NOTIFIER: "1",
+			PRISMA_HIDE_UPDATE_MESSAGE: "true"
 		}
 	});
 }

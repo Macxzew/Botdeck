@@ -21,7 +21,7 @@ function securityHeaders(isDev: boolean): Record<string, string> {
 			"img-src 'self' data: blob: https:",
 			"font-src 'self' data:",
 			"media-src 'self' blob: https:",
-			"connect-src 'self' ws://127.0.0.1:3001 ws://localhost:3001 wss://127.0.0.1:3002 wss://localhost:3002",
+			"connect-src 'self' ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*",
 			"object-src 'none'",
 			"base-uri 'self'",
 			"form-action 'self'",

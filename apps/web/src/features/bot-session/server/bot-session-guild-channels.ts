@@ -296,6 +296,9 @@ function buildChannelCreateOptions(channel: any, reason: string, permissionOverw
 
 
 const guildMemberFetchWarnings = new Set<string>();
+const guildMemberFetchRateLimits = new Map<string, number>();
+const guildMemberFetchRateLimitNotices = new Map<string, number>();
+const GUILD_MEMBER_FETCH_RATE_LIMIT_BUFFER_MS = 1_000;
 
 function getGuildShardId(guild: Guild): number {
   const shardId = (guild as any).shardId;
@@ -309,12 +312,34 @@ function hasGatewayShard(client: Client, guild: Guild): boolean {
 }
 
 
+function guildMemberFetchKey(context: BotSessionContext, guild: Guild): string {
+  return `${context.account.id}:${guild.id}`;
+}
+
+function retryAfterFromMemberFetchError(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { retryAfter?: unknown; data?: { retry_after?: unknown }; message?: unknown };
+  const direct = typeof candidate.retryAfter === "number" ? candidate.retryAfter : null;
+  const data = typeof candidate.data?.retry_after === "number" ? candidate.data.retry_after : null;
+  const seconds = direct ?? data;
+  if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds * 1000) + GUILD_MEMBER_FETCH_RATE_LIMIT_BUFFER_MS;
+  }
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const match = /Retry after ([0-9]+(?:\.[0-9]+)?) seconds/i.exec(message);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.ceil(parsed * 1000) + GUILD_MEMBER_FETCH_RATE_LIMIT_BUFFER_MS
+    : null;
+}
+
 function auditMemberFetchFallback(
   context: BotSessionContext,
   guild: Guild,
   error?: unknown,
 ): void {
-  const key = `${context.account.id}:${guild.id}:member-fetch-fallback`;
+  const key = `${guildMemberFetchKey(context, guild)}:member-fetch-fallback`;
   if (guildMemberFetchWarnings.has(key)) return;
   guildMemberFetchWarnings.add(key);
   context.publishEvent({
@@ -336,6 +361,32 @@ function auditMemberFetchFallback(
   });
 }
 
+function auditMemberFetchRateLimited(
+  context: BotSessionContext,
+  guild: Guild,
+  retryAfterMs: number,
+): void {
+  const key = guildMemberFetchKey(context, guild);
+  const nowMs = Date.now();
+  const previousNoticeAt = guildMemberFetchRateLimitNotices.get(key) ?? 0;
+  if (nowMs - previousNoticeAt < 60_000) return;
+  guildMemberFetchRateLimitNotices.set(key, nowMs);
+  context.publishEvent({
+    type: "audit.log",
+    level: "info",
+    message:
+      "Discord limite temporairement la synchronisation complète des membres. Botdeck affiche le cache local et réessaiera plus tard.",
+    context: {
+      botId: context.account.id,
+      botName: context.account.name,
+      guildId: guild.id,
+      guildName: guild.name,
+      shardId: getGuildShardId(guild),
+      retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    },
+  });
+}
+
 async function safeFetchGuildChannels(guild: Guild) {
   try {
     return await guild.channels.fetch();
@@ -349,15 +400,31 @@ async function safeFetchGuildMembers(
   guild: Guild,
   options?: { withPresences?: boolean },
 ): Promise<Collection<string, GuildMember> | null> {
+  const key = guildMemberFetchKey(context, guild);
+  const cooldownUntil = guildMemberFetchRateLimits.get(key) ?? 0;
+  const nowMs = Date.now();
+  if (cooldownUntil > nowMs) {
+    auditMemberFetchRateLimited(context, guild, cooldownUntil - nowMs);
+    return null;
+  }
   if (!hasGatewayShard(context.client, guild)) {
     auditMemberFetchFallback(context, guild);
     return null;
   }
 
   try {
-    return await guild.members.fetch(options);
+    const members = await guild.members.fetch(options);
+    guildMemberFetchRateLimits.delete(key);
+    guildMemberFetchRateLimitNotices.delete(key);
+    return members;
   } catch (error) {
-    auditMemberFetchFallback(context, guild, error);
+    const retryAfterMs = retryAfterFromMemberFetchError(error);
+    if (retryAfterMs) {
+      guildMemberFetchRateLimits.set(key, Date.now() + retryAfterMs);
+      auditMemberFetchRateLimited(context, guild, retryAfterMs);
+    } else {
+      auditMemberFetchFallback(context, guild, error);
+    }
     return null;
   }
 }
@@ -375,11 +442,10 @@ export async function refreshGuild(this: BotSessionContext,
   guild: Guild,
 ): Promise<{ channelCount: number; userIds: string[] }> {
   const fetchedChannels = await safeFetchGuildChannels(guild);
-  const fetchedMembers = await safeFetchGuildMembers(this, guild);
   await safeFetchGuildRoles(guild);
 
   const channelCollection = fetchedChannels ?? guild.channels.cache;
-  const memberCollection = fetchedMembers ?? guild.members.cache;
+  const memberCollection = guild.members.cache;
 
   const rawChannels = Array.from(channelCollection.values())
     .filter((channel): channel is GuildBasedChannel =>
@@ -694,24 +760,10 @@ export async function fetchGuildMembers(this: BotSessionContext, guildId: string
     (await this.client.guilds.fetch(guildId).catch(() => null));
   if (!guild) throw new Error("Server not found.");
 
-  let fetchedMembers = guild.members.cache;
   const allMembers = await safeFetchGuildMembers(this, guild, {
     withPresences: false,
   });
-  if (allMembers) {
-    fetchedMembers = allMembers;
-  } else {
-    this.publishEvent({
-      type: "audit.log",
-      level: "warn",
-      message:
-        "Could not fetch every server member. Botdeck is showing cached members instead.",
-      context: {
-        botId: this.account.id,
-        guildId,
-      },
-    });
-  }
+  const fetchedMembers = allMembers ?? guild.members.cache;
 
   const members = Array.from(fetchedMembers.values()).sort(
     (left, right) =>
